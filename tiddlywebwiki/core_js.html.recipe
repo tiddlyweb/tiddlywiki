@@ -1,0 +1,3 @@
+recipe: ../html/split.recipe
+recipe: ../shadows/split.recipe
+version: ../js/Version.js

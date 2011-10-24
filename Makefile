@@ -10,6 +10,7 @@ clean:
 	rm cooked/*.jar || true
 	rm cooked/*.js || true
 	rmdir cooked || true
+	rm js/tiddlywebwiki || true
 
 test: clean tests.html
 	ln -sf test/recipes/sample.txt .
@@ -21,3 +22,15 @@ tests.html:
 
 alpha:
 	./bldalpha
+
+twebwiki_remotes:
+	mkdir js/tiddlywebwiki || true
+	wget https://raw.github.com/tiddlyweb/tiddlywebwikiclient/master/ServerSideSavingPlugin.js \
+		-O js/tiddlywebwiki/ServerSideSavingPlugin.js
+	wget https://raw.github.com/tiddlyweb/tiddlywebwikiclient/master/TiddlyWebAdaptor.js \
+		-O js/tiddlywebwiki/TiddlyWebAdaptor.js
+	wget https://raw.github.com/tiddlyweb/tiddlywebwikiclient/master/TiddlyWebConfig.js \
+		-O js/tiddlywebwiki/TiddlyWebConfig.js
+
+twebwiki: twebwiki_remotes
+	./bldtwebwiki
