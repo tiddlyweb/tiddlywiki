@@ -11,8 +11,8 @@ mkdir -p $OUTPUT_DIR
 RELEASE=${1:-$DEFAULT_RELEASE}
 RECIPE=$PWD/tiddlywebwiki/tiddlywiki.html.recipe
 RECIPE_EXT_JS=$PWD/tiddlywebwiki/core_js.html.recipe
-cp jquery/jquery.js.js $OUTPUT_DIR
-cp jquery/plugins/jQuery.twStylesheet.js.js $OUTPUT_DIR
+cp jquery/jquery.js $OUTPUT_DIR/jquery.js.js
+cp jquery/plugins/jQuery.twStylesheet.js $OUTPUT_DIR/jQuery.twStylesheet.js.js
 cp tiddlywebwiki/index.recipe $OUTPUT_DIR
 cook $RECIPE $OUTPUT_DIR/custom_twcore.js.js -j
 cook $RECIPE_EXT_JS $OUTPUT_DIR/tiddlywiki.html
