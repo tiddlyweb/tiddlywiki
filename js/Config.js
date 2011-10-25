@@ -47,7 +47,7 @@ config.options = {
 	chkSaveEmptyTemplate: false,
 	chkOpenInNewWindow: true,
 	chkToggleLinks: false,
-	chkHttpReadOnly: true,
+	chkHttpReadOnly: false,
 	chkForceMinorUpdate: false,
 	chkConfirmDelete: true,
 	chkInsertTabs: false,
