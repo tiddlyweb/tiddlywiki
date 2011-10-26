@@ -14,5 +14,8 @@ RECIPE_EXT_JS=$PWD/tiddlywebwiki/core_js.html.recipe
 cp jquery/jquery.js $OUTPUT_DIR/jquery.js.js
 cp jquery/plugins/jQuery.twStylesheet.js $OUTPUT_DIR/jQuery.twStylesheet.js.js
 cp tiddlywebwiki/index.recipe $OUTPUT_DIR
+cp tiddlywebwiki/js.meta $OUTPUT_DIR/jQuery.twStylesheet.js.js.meta
+cp tiddlywebwiki/js.meta $OUTPUT_DIR/jquery.js.js.meta
+cp tiddlywebwiki/js.meta $OUTPUT_DIR/custom_twcore.js.js.meta
 cook $RECIPE $OUTPUT_DIR/custom_twcore.js.js -j
 cook $RECIPE_EXT_JS $OUTPUT_DIR/tiddlywiki.html
