@@ -19,7 +19,6 @@ js: TiddlyWiki.js
 js: Filters.js
 js: TiddlerFields.js
 js: Story.js
-js: Backstage.js
 js: Import.js
 js: Sync.js
 js: Manager.js
@@ -51,4 +50,5 @@ js: TW21Saver.js
 js: tiddlywebwiki/TiddlyWebAdaptor.js
 js: tiddlywebwiki/ServerSideSavingPlugin.js
 js: tiddlywebwiki/TiddlyWebConfig.js
+js: Backstage.js
 
