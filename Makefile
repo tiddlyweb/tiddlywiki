@@ -25,11 +25,11 @@ alpha:
 
 twebwiki_remotes:
 	mkdir js/tiddlywebwiki || true
-	wget https://raw.github.com/tiddlyweb/tiddlywebwikiclient/master/ServerSideSavingPlugin.js \
+	wget https://raw.github.com/jdlrobson/tiddlywebwikiclient/tiddlywebwikibuild/ServerSideSavingPlugin.js \
 		-O js/tiddlywebwiki/ServerSideSavingPlugin.js
-	wget https://raw.github.com/tiddlyweb/tiddlywebwikiclient/master/TiddlyWebAdaptor.js \
+	wget https://raw.github.com/jdlrobson/tiddlywebwikiclient/tiddlywebwikibuild/TiddlyWebAdaptor.js \
 		-O js/tiddlywebwiki/TiddlyWebAdaptor.js
-	wget https://raw.github.com/tiddlyweb/tiddlywebwikiclient/master/TiddlyWebConfig.js \
+	wget https://raw.github.com/jdlrobson/tiddlywebwikiclient/tiddlywebwikibuild/TiddlyWebConfig.js \
 		-O js/tiddlywebwiki/TiddlyWebConfig.js
 
 twebwiki: twebwiki_remotes
