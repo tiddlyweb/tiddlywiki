@@ -28,7 +28,6 @@ js: Messages.js
 js: Refresh.js
 js: Options.js
 js: Saving.js
-js: SavingRSS.js
 js: FileSystem.js
 js: AdaptorBase.js
 js: Http.js
