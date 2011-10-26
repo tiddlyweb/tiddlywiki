@@ -34,3 +34,8 @@ twebwiki_remotes:
 
 twebwiki: twebwiki_remotes
 	./bldtwebwiki
+
+release: clean twebwiki
+	mkdir twebwiki-release || true
+	rm -rf twebwiki-release/latest || true
+	cp -r cooked twebwiki-release/latest
