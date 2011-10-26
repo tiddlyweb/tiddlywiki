@@ -26,7 +26,7 @@ js: Manager.js
 js: Messages.js
 js: Refresh.js
 js: Options.js
-js: Saving.js
+js: SavingCommon.js
 js: FileSystem.js
 js: AdaptorBase.js
 js: Http.js
