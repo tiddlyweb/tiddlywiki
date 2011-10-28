@@ -31,8 +31,12 @@ jQuery(document).ready(function() {
 			story = new Story("tiddlerDisplay","tiddler");
 			jQuery("#contentWrapper").removeClass("loading");
 			for(var i = 0; i < json.length; i++) {
-				var tid = config.adaptors.tiddlyweb.toTiddler(json[i]);
-				store.addTiddler(tid);
+				var title = json[i].title;
+				if(["TiddlyWebConfig", "ServerSideSavingPlugin",
+					"TiddlySpaceInit", "TiddlyWebAdaptor"].indexOf(title) === -1) {
+					var tid = config.adaptors.tiddlyweb.toTiddler(json[i]);
+					store.addTiddler(tid);
+				}
 			}
 			main();
 		},
