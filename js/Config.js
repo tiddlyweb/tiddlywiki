@@ -13,8 +13,9 @@ var config = {
 };
 
 var host = window.location.hostname;
+var space = host.split(".")[0];
 var tw_config = { host: window.location.protocol + "//" + host,
-	workspace: "recipes/" + host.split(".")[0] + "_public" };
+	workspace: "recipes/" + space + "_public" };
 var script = document.createElement("script");
 document.body.appendChild(script);
 script.setAttribute("id", "tiddlywikiconfig");

@@ -19,29 +19,40 @@ jQuery(document).ready(function() {
 	jQuery("#contentWrapper").addClass("loading").text("Loading your TiddlyWiki...");
 	var defaults = config.defaultCustomFields;
 	var filter = "?select=type:!text/css&select=type:!text/html&select=type:!image/png&select=type:!image/jpg&select=type:!image/gif&select=type:!image/jpeg";
+	var success = function(json) {
+		store = new TiddlyWiki({config:config});
+		invokeParamifier(params,"oninit");
+		story = new Story("tiddlerDisplay","tiddler");
+		jQuery("#contentWrapper").removeClass("loading");
+		for(var i = 0; i < json.length; i++) {
+			var title = json[i].title;
+			if(["TiddlyWebConfig", "ServerSideSavingPlugin",
+				"TiddlySpaceInit", "TiddlyWebAdaptor"].indexOf(title) === -1) {
+				var tid = config.adaptors.tiddlyweb.toTiddler(json[i]);
+				store.addTiddler(tid);
+			}
+		}
+		main();
+	};
 	ajaxReq({
 		dataType: "json",
 		data: {
 			"fat": "y"
 		},
-		url: defaults["server.host"] + "/" + defaults["server.workspace"] + "/tiddlers" + filter,
-		success: function(json) {
-			store = new TiddlyWiki({config:config});
-			invokeParamifier(params,"oninit");
-			story = new Story("tiddlerDisplay","tiddler");
-			jQuery("#contentWrapper").removeClass("loading");
-			for(var i = 0; i < json.length; i++) {
-				var title = json[i].title;
-				if(["TiddlyWebConfig", "ServerSideSavingPlugin",
-					"TiddlySpaceInit", "TiddlyWebAdaptor"].indexOf(title) === -1) {
-					var tid = config.adaptors.tiddlyweb.toTiddler(json[i]);
-					store.addTiddler(tid);
-				}
-			}
-			main();
-		},
+		url: defaults["server.host"] + "/recipes/" + space + "_private" + "/tiddlers" + filter,
+		success: success,
 		error: function() {
-			jQuery("#contentWrapper").addClass("error").text("Error occurred loading your tiddlers");
+			ajaxReq({
+				dataType: "json",
+				data: {
+					"fat": "y"
+				},
+				url: defaults["server.host"] + "/recipes/" + space + "_public" + "/tiddlers" + filter,
+				success: success,
+				error: function() {
+					jQuery("#contentWrapper").addClass("error").text("Error occurred loading your tiddlers");
+				}
+			});
 		}
 	})
 });
