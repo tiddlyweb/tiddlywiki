@@ -1,4 +1,5 @@
 version: Version.js
+js: FileSystemUtils.js
 js: Guide.js
 js: Config.js
 js: ConfigBrowser.js
