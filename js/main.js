@@ -76,8 +76,6 @@ function main()
 		story.displayTiddler(null,"PluginManager");
 		displayMessage(config.messages.customConfigError);
 	}
-	if(showBackstage)
-		backstage.init();
 	t10 = new Date();
 	if(config.options.chkDisplayInstrumentation) {
 		displayMessage("LoadShadows " + (t2-t1) + " ms");

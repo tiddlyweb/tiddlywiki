@@ -47,5 +47,4 @@ js: TW21Saver.js
 js: tiddlywebwiki/TiddlyWebAdaptor.js
 js: tiddlywebwiki/ServerSideSavingPlugin.js
 js: tiddlywebwiki/TiddlyWebConfig.js
-js: Backstage.js
 
