@@ -18,12 +18,13 @@ var pluginInfo,tiddler; // Used to pass information to plugins in loadPlugins()
 jQuery(document).ready(function() {
 	jQuery("#contentWrapper").addClass("loading").text("Loading your TiddlyWiki...");
 	var defaults = config.defaultCustomFields;
+	var filter = "?select=type:!text/css&select=type:!text/html&select=type:!image/png&select=type:!image/jpg&select=type:!image/gif&select=type:!image/jpeg";
 	ajaxReq({
 		dataType: "json",
 		data: {
 			"fat": "y"
 		},
-		url: defaults["server.host"] + "/" + defaults["server.workspace"] + "/tiddlers",
+		url: defaults["server.host"] + "/" + defaults["server.workspace"] + "/tiddlers" + filter,
 		success: function(json) {
 			store = new TiddlyWiki({config:config});
 			invokeParamifier(params,"oninit");
