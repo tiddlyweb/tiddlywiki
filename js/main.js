@@ -1,7 +1,6 @@
 //--
 //-- Main
 //--
-
 var params = null; // Command line parameters
 var store = null; // TiddlyWiki storage
 var story = null; // Main story
@@ -16,12 +15,31 @@ var installedPlugins = []; // Information filled in when plugins are executed
 var startingUp = false; // Whether we're in the process of starting up
 var pluginInfo,tiddler; // Used to pass information to plugins in loadPlugins()
 
-// Whether to use the JavaSaver applet
-var useJavaSaver = (config.browser.isSafari || config.browser.isOpera) && (document.location.toString().substr(0,4) != "http");
-
-if(!window || !window.console) {
-	console = {tiddlywiki:true,log:function(message) {displayMessage(message);}};
-}
+jQuery(document).ready(function() {
+	jQuery("#contentWrapper").addClass("loading").text("Loading your TiddlyWiki...");
+	var defaults = config.defaultCustomFields;
+	ajaxReq({
+		dataType: "json",
+		data: {
+			"fat": "y"
+		},
+		url: defaults["server.host"] + "/" + defaults["server.workspace"] + "/tiddlers",
+		success: function(json) {
+			store = new TiddlyWiki({config:config});
+			invokeParamifier(params,"oninit");
+			story = new Story("tiddlerDisplay","tiddler");
+			jQuery("#contentWrapper").removeClass("loading");
+			for(var i = 0; i < json.length; i++) {
+				var tid = config.adaptors.tiddlyweb.toTiddler(json[i]);
+				store.addTiddler(tid);
+			}
+			main();
+		},
+		error: function() {
+			jQuery("#contentWrapper").addClass("error").text("Error occurred loading your tiddlers");
+		}
+	})
+});
 
 // Starting up
 function main()
@@ -34,11 +52,7 @@ function main()
 	params = getParameters();
 	if(params)
 		params = params.parseParams("open",null,false);
-	store = new TiddlyWiki({config:config});
-	invokeParamifier(params,"oninit");
-	story = new Story("tiddlerDisplay","tiddler");
 	addEvent(document,"click",Popup.onDocumentClick);
-	saveTest();
 	var s;
 	for(s=0; s<config.notifyTiddlers.length; s++)
 		store.addNotification(config.notifyTiddlers[s].name,config.notifyTiddlers[s].notify);
@@ -107,14 +121,6 @@ function restart()
 		story.displayDefaultTiddlers();
 	}
 	window.scrollTo(0,0);
-}
-
-function saveTest()
-{
-	var s = document.getElementById("saveTest");
-	if(s.hasChildNodes())
-		alert(config.messages.savedSnapshotError);
-	s.appendChild(document.createTextNode("savetest"));
 }
 
 function loadShadowTiddlers()

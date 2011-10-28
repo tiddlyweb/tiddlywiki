@@ -4,7 +4,6 @@ js: Guide.js
 js: Config.js
 js: ConfigBrowser.js
 js: Lingo.js
-js: main.js
 js: Paramifiers.js
 js: FormatterHelpers.js
 js: Formatter.js
@@ -48,4 +47,5 @@ js: TW21Saver.js
 js: tiddlywebwiki/TiddlyWebAdaptor.js
 js: tiddlywebwiki/ServerSideSavingPlugin.js
 js: tiddlywebwiki/TiddlyWebConfig.js
+js: main.js
 
