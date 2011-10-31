@@ -12,16 +12,6 @@ var config = {
 	locale: "en" // W3C language tag
 };
 
-var host = window.location.hostname;
-var space = host.split(".")[0];
-var tw_config = { host: window.location.protocol + "//" + host,
-	workspace: "recipes/" + space + "_public" };
-var script = document.createElement("script");
-document.body.appendChild(script);
-script.setAttribute("id", "tiddlywikiconfig");
-script.setAttribute("type", "application/json");
-script.appendChild(document.createTextNode(JSON.stringify(tw_config)));
-
 // Hashmap of alternative parsers for the wikifier
 config.parsers = {};
 

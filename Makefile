@@ -29,8 +29,6 @@ twebwiki_remotes:
 		-O js/tiddlywebwiki/ServerSideSavingPlugin.js
 	wget https://raw.github.com/jdlrobson/tiddlywebwikiclient/tiddlywebwikibuild/TiddlyWebAdaptor.js \
 		-O js/tiddlywebwiki/TiddlyWebAdaptor.js
-	wget https://raw.github.com/jdlrobson/tiddlywebwikiclient/tiddlywebwikibuild/TiddlyWebConfig.js \
-		-O js/tiddlywebwiki/TiddlyWebConfig.js
 
 twebwiki: twebwiki_remotes
 	./bldtwebwiki

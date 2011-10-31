@@ -14,13 +14,21 @@ var showBackstage; // Whether to include the backstage area
 var installedPlugins = []; // Information filled in when plugins are executed
 var startingUp = false; // Whether we're in the process of starting up
 var pluginInfo,tiddler; // Used to pass information to plugins in loadPlugins()
-var notReadOnly;
 
 jQuery(document).ready(function() {
-	jQuery("#contentWrapper").addClass("loading").text("Loading your TiddlyWiki...");
+
+jQuery("#contentWrapper").addClass("loading").text("Loading your TiddlyWiki...");
+
+ajaxReq({ dataType: "json", url: "/status", success: function(status) {
+	var host = window.location.protocol + "//" + window.location.hostname;
+	var workspace = "recipes/" + status["space"]["recipe"];
+	config.defaultCustomFields = {
+		"server.workspace": workspace,
+		"server.type": "tiddlyweb",
+		"server.host": host
+	};
 	var defaults = config.defaultCustomFields;
 	var filter = "?select=tag:excludeLists&type:!text/css&select=type:!text/html&select=type:!image/png&select=type:!image/jpg&select=type:!image/gif&select=type:!image/jpeg";
-	var host = defaults["server.host"];
 	var time = 0, start = 0, total = 20;
 	var lazy_load_content = function(title) {
 		window.setTimeout(function() {
@@ -57,43 +65,29 @@ jQuery(document).ready(function() {
 		jQuery("#contentWrapper").removeClass("loading");
 		for(var i = 0; i < json.length; i++) {
 			var title = json[i].title;
-			if(["TiddlyWebConfig", "ServerSideSavingPlugin",
+			if(["ServerSideSavingPlugin",
 				"TiddlySpaceInit", "TiddlyWebAdaptor", "LoadMissingTiddlersPlugin"].indexOf(title) === -1) {
-				var tid = config.adaptors.tiddlyweb.toTiddler(json[i]);
+				var tid = config.adaptors.tiddlyweb.toTiddler(json[i], host);
 				store.addTiddler(tid);
 			}
 		}
 		lazy_load_content();
 		main();
-		if(notReadOnly) {
-			readOnly = false;
-			refreshAll();
-		}
 	};
 	ajaxReq({
 		dataType: "json",
 		data: {
 			"fat": "y"
 		},
-		url: host + "/recipes/" + space + "_private" + "/tiddlers" + filter,
+		url: host + "/" + workspace + "/tiddlers" + filter,
 		success: function(tiddlers) {
-			notReadOnly = true;
 			success(tiddlers);
 		},
 		error: function() {
-			ajaxReq({
-				dataType: "json",
-				data: {
-					"fat": "y"
-				},
-				url: defaults["server.host"] + "/recipes/" + space + "_public" + "/tiddlers" + filter,
-				success: success,
-				error: function() {
-					jQuery("#contentWrapper").addClass("error").text("Error occurred loading your tiddlers");
-				}
-			});
+			jQuery("#contentWrapper").addClass("error").text("Error occurred loading your tiddlers");
 		}
 	});
+}});
 });
 
 // Starting up
