@@ -18,7 +18,7 @@ var pluginInfo,tiddler; // Used to pass information to plugins in loadPlugins()
 jQuery(document).ready(function() {
 	jQuery("#contentWrapper").addClass("loading").text("Loading your TiddlyWiki...");
 	var defaults = config.defaultCustomFields;
-	var filter = "?select=type:!text/css&select=type:!text/html&select=type:!image/png&select=type:!image/jpg&select=type:!image/gif&select=type:!image/jpeg";
+	var filter = "?select=tag:excludeLists&type:!text/css&select=type:!text/html&select=type:!image/png&select=type:!image/jpg&select=type:!image/gif&select=type:!image/jpeg";
 	var success = function(json) {
 		store = new TiddlyWiki({config:config});
 		invokeParamifier(params,"oninit");
