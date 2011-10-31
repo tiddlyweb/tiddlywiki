@@ -75,7 +75,7 @@ jQuery(document).ready(function() {
 		data: {
 			"fat": "y"
 		},
-		url: defaults["server.host"] + "/recipes/" + space + "_private" + "/tiddlers" + filter,
+		url: host + "/recipes/" + space + "_private" + "/tiddlers" + filter,
 		success: function(tiddlers) {
 			notReadOnly = true;
 			success(tiddlers);
@@ -93,7 +93,7 @@ jQuery(document).ready(function() {
 				}
 			});
 		}
-	})
+	});
 });
 
 // Starting up
