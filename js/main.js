@@ -58,7 +58,7 @@ jQuery(document).ready(function() {
 		for(var i = 0; i < json.length; i++) {
 			var title = json[i].title;
 			if(["TiddlyWebConfig", "ServerSideSavingPlugin",
-				"TiddlySpaceInit", "TiddlyWebAdaptor"].indexOf(title) === -1) {
+				"TiddlySpaceInit", "TiddlyWebAdaptor", "LoadMissingTiddlersPlugin"].indexOf(title) === -1) {
 				var tid = config.adaptors.tiddlyweb.toTiddler(json[i]);
 				store.addTiddler(tid);
 			}
