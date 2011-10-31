@@ -1,4 +1,96 @@
 
+function convertUTF8ToUnicode(u)
+{
+	return config.browser.isOpera || !window.netscape ? manualConvertUTF8ToUnicode(u) : mozConvertUTF8ToUnicode(u);
+}
+
+function manualConvertUTF8ToUnicode(utf)
+{
+	var uni = utf;
+	var src = 0;
+	var dst = 0;
+	var b1, b2, b3;
+	var c;
+	while(src < utf.length) {
+		b1 = utf.charCodeAt(src++);
+		if(b1 < 0x80) {
+			dst++;
+		} else if(b1 < 0xE0) {
+			b2 = utf.charCodeAt(src++);
+			c = String.fromCharCode(((b1 & 0x1F) << 6) | (b2 & 0x3F));
+			uni = uni.substring(0,dst++).concat(c,utf.substr(src));
+		} else {
+			b2 = utf.charCodeAt(src++);
+			b3 = utf.charCodeAt(src++);
+			c = String.fromCharCode(((b1 & 0xF) << 12) | ((b2 & 0x3F) << 6) | (b3 & 0x3F));
+			uni = uni.substring(0,dst++).concat(c,utf.substr(src));
+		}
+	}
+	return uni;
+}
+
+function mozConvertUTF8ToUnicode(u)
+{
+	try {
+		netscape.security.PrivilegeManager.enablePrivilege("UniversalXPConnect");
+		var converter = Components.classes["@mozilla.org/intl/scriptableunicodeconverter"].createInstance(Components.interfaces.nsIScriptableUnicodeConverter);
+		converter.charset = "UTF-8";
+	} catch(ex) {
+		return manualConvertUTF8ToUnicode(u);
+	} // fallback
+	var s = converter.ConvertToUnicode(u);
+	var fin = converter.Finish();
+	return fin.length > 0 ? s+fin : s;
+}
+
+function convertUnicodeToFileFormat(s)
+{
+	return config.browser.isOpera || !window.netscape ? (config.browser.isIE ? convertUnicodeToHtmlEntities(s) : s) : mozConvertUnicodeToUTF8(s);
+}
+
+function convertUnicodeToHtmlEntities(s)
+{
+	var re = /[^\u0000-\u007F]/g;
+	return s.replace(re,function($0) {return "&#" + $0.charCodeAt(0).toString() + ";";});
+}
+
+function convertUnicodeToUTF8(s)
+{
+// return convertUnicodeToFileFormat to allow plugin migration
+	return convertUnicodeToFileFormat(s);
+}
+
+function manualConvertUnicodeToUTF8(s)
+{
+	return unescape(encodeURIComponent(s));
+}
+
+function mozConvertUnicodeToUTF8(s)
+{
+	try {
+		netscape.security.PrivilegeManager.enablePrivilege("UniversalXPConnect");
+		var converter = Components.classes["@mozilla.org/intl/scriptableunicodeconverter"].createInstance(Components.interfaces.nsIScriptableUnicodeConverter);
+		converter.charset = "UTF-8";
+	} catch(ex) {
+		return manualConvertUnicodeToUTF8(s);
+	} // fallback
+	var u = converter.ConvertFromUnicode(s);
+	var fin = converter.Finish();
+	return fin.length > 0 ? u + fin : u;
+}
+
+function convertUriToUTF8(uri,charSet)
+{
+	if(window.netscape == undefined || charSet == undefined || charSet == "")
+		return uri;
+	try {
+		netscape.security.PrivilegeManager.enablePrivilege("UniversalXPConnect");
+		var converter = Components.classes["@mozilla.org/intl/utf8converterservice;1"].getService(Components.interfaces.nsIUTF8ConverterService);
+	} catch(ex) {
+		return uri;
+	}
+	return converter.convertURISpecToUTF8(uri,charSet);
+}
 //
 // Please note:
 //
@@ -763,241 +855,6 @@ merge(config.annotations,{
 	ToolbarCommands: "This shadow tiddler determines which commands are shown in tiddler toolbars",
 	ViewTemplate: "The HTML template in this shadow tiddler determines how tiddlers look"
 	});
-//--
-//-- Main
-//--
-
-var params = null; // Command line parameters
-var store = null; // TiddlyWiki storage
-var story = null; // Main story
-var formatter = null; // Default formatters for the wikifier
-var anim = typeof Animator == "function" ? new Animator() : null; // Animation engine
-var readOnly = false; // Whether we're in readonly mode
-var highlightHack = null; // Embarrassing hack department...
-var hadConfirmExit = false; // Don't warn more than once
-var safeMode = false; // Disable all plugins and cookies
-var showBackstage; // Whether to include the backstage area
-var installedPlugins = []; // Information filled in when plugins are executed
-var startingUp = false; // Whether we're in the process of starting up
-var pluginInfo,tiddler; // Used to pass information to plugins in loadPlugins()
-
-// Whether to use the JavaSaver applet
-var useJavaSaver = (config.browser.isSafari || config.browser.isOpera) && (document.location.toString().substr(0,4) != "http");
-
-if(!window || !window.console) {
-	console = {tiddlywiki:true,log:function(message) {displayMessage(message);}};
-}
-
-// Starting up
-function main()
-{
-	var t10,t9,t8,t7,t6,t5,t4,t3,t2,t1,t0 = new Date();
-	startingUp = true;
-	var doc = jQuery(document);
-	jQuery.noConflict();
-	window.onbeforeunload = function(e) {if(window.confirmExit) return confirmExit();};
-	params = getParameters();
-	if(params)
-		params = params.parseParams("open",null,false);
-	store = new TiddlyWiki({config:config});
-	invokeParamifier(params,"oninit");
-	story = new Story("tiddlerDisplay","tiddler");
-	addEvent(document,"click",Popup.onDocumentClick);
-	saveTest();
-	var s;
-	for(s=0; s<config.notifyTiddlers.length; s++)
-		store.addNotification(config.notifyTiddlers[s].name,config.notifyTiddlers[s].notify);
-	t1 = new Date();
-	loadShadowTiddlers();
-	doc.trigger("loadShadows");
-	t2 = new Date();
-	store.loadFromDiv("storeArea","store",true);
-	doc.trigger("loadTiddlers");
-	loadOptions();
-	t3 = new Date();
-	invokeParamifier(params,"onload");
-	t4 = new Date();
-	readOnly = (window.location.protocol == "file:") ? false : config.options.chkHttpReadOnly;
-	var pluginProblem = loadPlugins("systemConfig");
-	doc.trigger("loadPlugins");
-	t5 = new Date();
-	formatter = new Formatter(config.formatters);
-	invokeParamifier(params,"onconfig");
-	story.switchTheme(config.options.txtTheme);
-	showBackstage = showBackstage !== undefined ? showBackstage : !readOnly;
-	t6 = new Date();
-	var m;
-	for(m in config.macros) {
-		if(config.macros[m].init)
-			config.macros[m].init();
-	}
-	t7 = new Date();
-	store.notifyAll();
-	t8 = new Date();
-	restart();
-	refreshDisplay();
-	t9 = new Date();
-	if(pluginProblem) {
-		story.displayTiddler(null,"PluginManager");
-		displayMessage(config.messages.customConfigError);
-	}
-	if(showBackstage)
-		backstage.init();
-	t10 = new Date();
-	if(config.options.chkDisplayInstrumentation) {
-		displayMessage("LoadShadows " + (t2-t1) + " ms");
-		displayMessage("LoadFromDiv " + (t3-t2) + " ms");
-		displayMessage("LoadPlugins " + (t5-t4) + " ms");
-		displayMessage("Macro init " + (t7-t6) + " ms");
-		displayMessage("Notify " + (t8-t7) + " ms");
-		displayMessage("Restart " + (t9-t8) + " ms");
-		displayMessage("Total: " + (t10-t0) + " ms");
-	}
-	startingUp = false;
-	doc.trigger("startup");
-}
-
-// Called on unload. All functions called conditionally since they themselves may have been unloaded.
-function unload()
-{
-	if(window.checkUnsavedChanges)
-		checkUnsavedChanges();
-	if(window.scrubNodes)
-		scrubNodes(document.body);
-}
-
-// Restarting
-function restart()
-{
-	invokeParamifier(params,"onstart");
-	if(story.isEmpty()) {
-		story.displayDefaultTiddlers();
-	}
-	window.scrollTo(0,0);
-}
-
-function saveTest()
-{
-	var s = document.getElementById("saveTest");
-	if(s.hasChildNodes())
-		alert(config.messages.savedSnapshotError);
-	s.appendChild(document.createTextNode("savetest"));
-}
-
-function loadShadowTiddlers()
-{
-	var shadows = new TiddlyWiki();
-	shadows.loadFromDiv("shadowArea","shadows",true);
-	shadows.forEachTiddler(function(title,tiddler){config.shadowTiddlers[title] = tiddler.text;});
-}
-
-function loadPlugins(tag)
-{
-	if(safeMode)
-		return false;
-	var tiddlers = store.getTaggedTiddlers(tag);
-	tiddlers.sort(function(a,b) {return a.title < b.title ? -1 : (a.title == b.title ? 0 : 1);});
-	var toLoad = [];
-	var nLoaded = 0;
-	var map = {};
-	var nPlugins = tiddlers.length;
-	installedPlugins = [];
-	var i;
-	for(i=0; i<nPlugins; i++) {
-		var p = getPluginInfo(tiddlers[i]);
-		installedPlugins[i] = p;
-		var n = p.Name || p.title;
-		if(n)
-			map[n] = p;
-		n = p.Source;
-		if(n)
-			map[n] = p;
-	}
-	var visit = function(p) {
-		if(!p || p.done)
-			return;
-		p.done = 1;
-		var reqs = p.Requires;
-		if(reqs) {
-			reqs = reqs.readBracketedList();
-			var i;
-			for(i=0; i<reqs.length; i++)
-				visit(map[reqs[i]]);
-		}
-		toLoad.push(p);
-	};
-	for(i=0; i<nPlugins; i++)
-		visit(installedPlugins[i]);
-	for(i=0; i<toLoad.length; i++) {
-		p = toLoad[i];
-		pluginInfo = p;
-		tiddler = p.tiddler;
-		if(isPluginExecutable(p)) {
-			if(isPluginEnabled(p)) {
-				p.executed = true;
-				var startTime = new Date();
-				try {
-					if(tiddler.text)
-						window.eval(tiddler.text);
-					nLoaded++;
-				} catch(ex) {
-					p.log.push(config.messages.pluginError.format([exceptionText(ex)]));
-					p.error = true;
-					if(!console.tiddlywiki) {
-						console.log("error evaluating " + tiddler.title, ex);
-					}
-				}
-				pluginInfo.startupTime = String((new Date()) - startTime) + "ms";
-			} else {
-				nPlugins--;
-			}
-		} else {
-			p.warning = true;
-		}
-	}
-	return nLoaded != nPlugins;
-}
-
-function getPluginInfo(tiddler)
-{
-	var p = store.getTiddlerSlices(tiddler.title,["Name","Description","Version","Requires","CoreVersion","Date","Source","Author","License","Browsers"]);
-	p.tiddler = tiddler;
-	p.title = tiddler.title;
-	p.log = [];
-	return p;
-}
-
-// Check that a particular plugin is valid for execution
-function isPluginExecutable(plugin)
-{
-	if(plugin.tiddler.isTagged("systemConfigForce")) {
-		plugin.log.push(config.messages.pluginForced);
-		return true;
-	}
-	if(plugin["CoreVersion"]) {
-		var coreVersion = plugin["CoreVersion"].split(".");
-		var w = parseInt(coreVersion[0],10) - version.major;
-		if(w == 0 && coreVersion[1])
-			w = parseInt(coreVersion[1],10) - version.minor;
-		if(w == 0 && coreVersion[2])
-			w = parseInt(coreVersion[2],10) - version.revision;
-		if(w > 0) {
-			plugin.log.push(config.messages.pluginVersionError);
-			return false;
-		}
-	}
-	return true;
-}
-
-function isPluginEnabled(plugin)
-{
-	if(plugin.tiddler.isTagged("systemConfigDisable")) {
-		plugin.log.push(config.messages.pluginDisabled);
-		return false;
-	}
-	return true;
-}
-
 //--
 //-- Paramifiers
 //--
@@ -4740,610 +4597,6 @@ Story.prototype.switchTheme = function(theme)
 };
 
 //--
-//-- ImportTiddlers macro
-//--
-
-config.macros.importTiddlers.handler = function(place,macroName,params,wikifier,paramString,tiddler)
-{
-	if(readOnly) {
-		createTiddlyElement(place,"div",null,"marked",this.readOnlyWarning);
-		return;
-	}
-	var w = new Wizard();
-	w.createWizard(place,this.wizardTitle);
-	this.restart(w);
-};
-
-config.macros.importTiddlers.onCancel = function(e)
-{
-	var wizard = new Wizard(this);
-	wizard.clear();
-	config.macros.importTiddlers.restart(wizard);
-	return false;
-};
-
-config.macros.importTiddlers.onClose = function(e)
-{
-	backstage.hidePanel();
-	return false;
-};
-
-config.macros.importTiddlers.restart = function(wizard)
-{
-	var me = config.macros.importTiddlers;
-	wizard.addStep(this.step1Title,this.step1Html);
-	var t,s = wizard.getElement("selTypes");
-	for(t in config.adaptors) {
-		var e = createTiddlyElement(s,"option",null,null,config.adaptors[t].serverLabel || t);
-		e.value = t;
-	}
-	if(config.defaultAdaptor)
-		s.value = config.defaultAdaptor;
-	s = wizard.getElement("selFeeds");
-	var feeds = this.getFeeds();
-	for(t in feeds) {
-		e = createTiddlyElement(s,"option",null,null,t);
-		e.value = t;
-	}
-	wizard.setValue("feeds",feeds);
-	s.onchange = me.onFeedChange;
-	var fileInput = wizard.getElement("txtBrowse");
-	fileInput.onchange = me.onBrowseChange;
-	fileInput.onkeyup = me.onBrowseChange;
-	wizard.setButtons([{caption: this.openLabel, tooltip: this.openPrompt, onClick: me.onOpen}]);
-	wizard.formElem.action = "javascript:;";
-	wizard.formElem.onsubmit = function() {
-		if(!this.txtPath || this.txtPath.value.length) //# check for manually entered path in first step
-			this.lastChild.firstChild.onclick();
-	};
-};
-
-config.macros.importTiddlers.getFeeds = function()
-{
-	var feeds = {};
-	var t,tagged = store.getTaggedTiddlers("systemServer","title");
-	for(t=0; t<tagged.length; t++) {
-		var title = tagged[t].title;
-		var serverType = store.getTiddlerSlice(title,"Type");
-		if(!serverType)
-			serverType = "file";
-		feeds[title] = {title: title,
-						url: store.getTiddlerSlice(title,"URL"),
-						workspace: store.getTiddlerSlice(title,"Workspace"),
-						workspaceList: store.getTiddlerSlice(title,"WorkspaceList"),
-						tiddlerFilter: store.getTiddlerSlice(title,"TiddlerFilter"),
-						serverType: serverType,
-						description: store.getTiddlerSlice(title,"Description")};
-	}
-	return feeds;
-};
-
-config.macros.importTiddlers.onFeedChange = function(e)
-{
-	var wizard = new Wizard(this);
-	var selTypes = wizard.getElement("selTypes");
-	var fileInput = wizard.getElement("txtPath");
-	var feeds = wizard.getValue("feeds");
-	var f = feeds[this.value];
-	if(f) {
-		selTypes.value = f.serverType;
-		fileInput.value = f.url;
-		wizard.setValue("feedName",f.serverType);
-		wizard.setValue("feedHost",f.url);
-		wizard.setValue("feedWorkspace",f.workspace);
-		wizard.setValue("feedWorkspaceList",f.workspaceList);
-		wizard.setValue("feedTiddlerFilter",f.tiddlerFilter);
-	}
-	return false;
-};
-
-config.macros.importTiddlers.onBrowseChange = function(e)
-{
-	var wizard = new Wizard(this);
-	var file = this.value;
-	if(this.files && this.files[0]) {
-		file = this.files[0].fileName;
-		try {
-			if(typeof(netscape) !== "undefined") {
-				netscape.security.PrivilegeManager.enablePrivilege("UniversalFileRead");
-			}
-		} catch (ex) {
-			showException(ex);
-		}
-	}
-	var fileInput = wizard.getElement("txtPath");
-	fileInput.value = config.macros.importTiddlers.getURLFromLocalPath(file);
-	var serverType = wizard.getElement("selTypes");
-	serverType.value = "file";
-	return true;
-};
-
-config.macros.importTiddlers.getURLFromLocalPath = function(v)
-{
-	if(!v || !v.length)
-		return v;
-	v = v.replace(/\\/g,"/"); // use "/" for cross-platform consistency
-	var u;
-	var t = v.split(":");
-	var p = t[1] || t[0]; // remove drive letter (if any)
-	if(t[1] && (t[0] == "http" || t[0] == "https" || t[0] == "file")) {
-		u = v;
-	} else if(p.substr(0,1)=="/") {
-		u = document.location.protocol + "//" + document.location.hostname + (t[1] ? "/" : "") + v;
-	} else {
-		var c = document.location.href.replace(/\\/g,"/");
-		var pos = c.lastIndexOf("/");
-		if(pos!=-1)
-			c = c.substr(0,pos); // remove filename
-		u = c + "/" + p;
-	}
-	return u;
-};
-
-config.macros.importTiddlers.onOpen = function(e)
-{
-	var me = config.macros.importTiddlers;
-	var wizard = new Wizard(this);
-	var fileInput = wizard.getElement("txtPath");
-	var url = fileInput.value;
-	var serverType = wizard.getElement("selTypes").value || config.defaultAdaptor;
-	var adaptor = new config.adaptors[serverType]();
-	wizard.setValue("adaptor",adaptor);
-	wizard.setValue("serverType",serverType);
-	wizard.setValue("host",url);
-	adaptor.openHost(url,null,wizard,me.onOpenHost);
-	wizard.setButtons([{caption: me.cancelLabel, tooltip: me.cancelPrompt, onClick: me.onCancel}],me.statusOpenHost);
-	return false;
-};
-
-config.macros.importTiddlers.onOpenHost = function(context,wizard)
-{
-	var me = config.macros.importTiddlers;
-	var adaptor = wizard.getValue("adaptor");
-	if(context.status !== true)
-		displayMessage("Error in importTiddlers.onOpenHost: " + context.statusText);
-	adaptor.getWorkspaceList(context,wizard,me.onGetWorkspaceList);
-	wizard.setButtons([{caption: me.cancelLabel, tooltip: me.cancelPrompt, onClick: me.onCancel}],me.statusGetWorkspaceList);
-};
-
-config.macros.importTiddlers.onGetWorkspaceList = function(context,wizard)
-{
-	var me = config.macros.importTiddlers;
-	if(context.status !== true)
-		displayMessage("Error in importTiddlers.onGetWorkspaceList: " + context.statusText);
-	wizard.setValue("context",context);
-	var workspace = wizard.getValue("feedWorkspace");
-	if(!workspace && context.workspaces.length==1)
-		workspace = context.workspaces[0].title;
-	if(workspace) {
-		context.adaptor.openWorkspace(workspace,context,wizard,me.onOpenWorkspace);
-		wizard.setValue("workspace",workspace);
-		wizard.setButtons([{caption: me.cancelLabel, tooltip: me.cancelPrompt, onClick: me.onCancel}],me.statusOpenWorkspace);
-		return;
-	}
-	wizard.addStep(me.step2Title,me.step2Html);
-	var t,s = wizard.getElement("selWorkspace");
-	s.onchange = me.onWorkspaceChange;
-	for(t=0; t<context.workspaces.length; t++) {
-		var e = createTiddlyElement(s,"option",null,null,context.workspaces[t].title);
-		e.value = context.workspaces[t].title;
-	}
-	var workspaceList = wizard.getValue("feedWorkspaceList");
-	if(workspaceList) {
-		var n,list = workspaceList.parseParams("workspace",null,false,true);
-		for(n=1; n<list.length; n++) {
-			if(context.workspaces.findByField("title",list[n].value) == null) {
-				e = createTiddlyElement(s,"option",null,null,list[n].value);
-				e.value = list[n].value;
-			}
-		}
-	}
-	if(workspace) {
-		t = wizard.getElement("txtWorkspace");
-		t.value = workspace;
-	}
-	wizard.setButtons([{caption: me.openLabel, tooltip: me.openPrompt, onClick: me.onChooseWorkspace}]);
-};
-
-config.macros.importTiddlers.onWorkspaceChange = function(e)
-{
-	var wizard = new Wizard(this);
-	var t = wizard.getElement("txtWorkspace");
-	t.value = this.value;
-	this.selectedIndex = 0;
-	return false;
-};
-
-config.macros.importTiddlers.onChooseWorkspace = function(e)
-{
-	var me = config.macros.importTiddlers;
-	var wizard = new Wizard(this);
-	var adaptor = wizard.getValue("adaptor");
-	var workspace = wizard.getElement("txtWorkspace").value;
-	wizard.setValue("workspace",workspace);
-	var context = wizard.getValue("context");
-	adaptor.openWorkspace(workspace,context,wizard,me.onOpenWorkspace);
-	wizard.setButtons([{caption: me.cancelLabel, tooltip: me.cancelPrompt, onClick: me.onCancel}],me.statusOpenWorkspace);
-	return false;
-};
-
-config.macros.importTiddlers.onOpenWorkspace = function(context,wizard)
-{
-	var me = config.macros.importTiddlers;
-	if(context.status !== true)
-		displayMessage("Error in importTiddlers.onOpenWorkspace: " + context.statusText);
-	var adaptor = wizard.getValue("adaptor");
-	adaptor.getTiddlerList(context,wizard,me.onGetTiddlerList,wizard.getValue("feedTiddlerFilter"));
-	wizard.setButtons([{caption: me.cancelLabel, tooltip: me.cancelPrompt, onClick: me.onCancel}],me.statusGetTiddlerList);
-};
-
-config.macros.importTiddlers.onGetTiddlerList = function(context,wizard)
-{
-	var me = config.macros.importTiddlers;
-	if(context.status !== true) {
-		var error = context.statusText||me.errorGettingTiddlerList;
-		if(context.host.indexOf("file://") === 0) {
-			error = me.errorGettingTiddlerListFile;
-		} else {
-			error = context.xhr && context.xhr.status == 404 ? me.errorGettingTiddlerListHttp404 :
-				me.errorGettingTiddlerListHttp;
-		}
-		wizard.setButtons([{caption: me.cancelLabel, tooltip: me.cancelPrompt, onClick: me.onCancel}],"");
-		jQuery("span.status", wizard.footerEl).html(error); // so error message can be html
-		return;
-	}
-	// Extract data for the listview
-	var listedTiddlers = [];
-	if(context.tiddlers) {
-		var n;
-		for(n=0; n<context.tiddlers.length; n++) {
-			var tiddler = context.tiddlers[n];
-			listedTiddlers.push({
-				title: tiddler.title,
-				modified: tiddler.modified,
-				modifier: tiddler.modifier,
-				text: tiddler.text ? wikifyPlainText(tiddler.text,100) : "",
-				tags: tiddler.tags,
-				size: tiddler.text ? tiddler.text.length : 0,
-				tiddler: tiddler
-			});
-		}
-	}
-	listedTiddlers.sort(function(a,b) {return a.title < b.title ? -1 : (a.title == b.title ? 0 : +1);});
-	// Display the listview
-	wizard.addStep(me.step3Title,me.step3Html);
-	var markList = wizard.getElement("markList");
-	var listWrapper = document.createElement("div");
-	markList.parentNode.insertBefore(listWrapper,markList);
-	var listView = ListView.create(listWrapper,listedTiddlers,me.listViewTemplate);
-	wizard.setValue("listView",listView);
-	wizard.setValue("context",context);
-	var txtSaveTiddler = wizard.getElement("txtSaveTiddler");
-	txtSaveTiddler.value = me.generateSystemServerName(wizard);
-	wizard.setButtons([
-			{caption: me.cancelLabel, tooltip: me.cancelPrompt, onClick: me.onCancel},
-			{caption: me.importLabel, tooltip: me.importPrompt, onClick: me.doImport}
-		]);
-};
-
-config.macros.importTiddlers.generateSystemServerName = function(wizard)
-{
-	var serverType = wizard.getValue("serverType");
-	var host = wizard.getValue("host");
-	var workspace = wizard.getValue("workspace");
-	var pattern = config.macros.importTiddlers[workspace ? "systemServerNamePattern" : "systemServerNamePatternNoWorkspace"];
-	return pattern.format([serverType,host,workspace]);
-};
-
-config.macros.importTiddlers.saveServerTiddler = function(wizard)
-{
-	var me = config.macros.importTiddlers;
-	var txtSaveTiddler = wizard.getElement("txtSaveTiddler").value;
-	if(store.tiddlerExists(txtSaveTiddler)) {
-		if(!confirm(me.confirmOverwriteSaveTiddler.format([txtSaveTiddler])))
-			return;
-		store.suspendNotifications();
-		store.removeTiddler(txtSaveTiddler);
-		store.resumeNotifications();
-	}
-	var serverType = wizard.getValue("serverType");
-	var host = wizard.getValue("host");
-	var workspace = wizard.getValue("workspace");
-	var text = me.serverSaveTemplate.format([serverType,host,workspace]);
-	store.saveTiddler(txtSaveTiddler,txtSaveTiddler,text,me.serverSaveModifier,new Date(),["systemServer"]);
-};
-
-config.macros.importTiddlers.doImport = function(e)
-{
-	var me = config.macros.importTiddlers;
-	var wizard = new Wizard(this);
-	if(wizard.getElement("chkSave").checked)
-		me.saveServerTiddler(wizard);
-	var chkSync = wizard.getElement("chkSync").checked;
-	wizard.setValue("sync",chkSync);
-	var listView = wizard.getValue("listView");
-	var rowNames = ListView.getSelectedRows(listView);
-	var adaptor = wizard.getValue("adaptor");
-	var overwrite = [];
-	var t;
-	for(t=0; t<rowNames.length; t++) {
-		if(store.tiddlerExists(rowNames[t]))
-			overwrite.push(rowNames[t]);
-	}
-	if(overwrite.length > 0) {
-		if(!confirm(me.confirmOverwriteText.format([overwrite.join(", ")])))
-			return false;
-	}
-	wizard.addStep(me.step4Title.format([rowNames.length]),me.step4Html);
-	for(t=0; t<rowNames.length; t++) {
-		var link = document.createElement("div");
-		createTiddlyLink(link,rowNames[t],true);
-		var place = wizard.getElement("markReport");
-		place.parentNode.insertBefore(link,place);
-	}
-	wizard.setValue("remainingImports",rowNames.length);
-	wizard.setButtons([
-			{caption: me.cancelLabel, tooltip: me.cancelPrompt, onClick: me.onCancel}
-		],me.statusDoingImport);
-	var wizardContext = wizard.getValue("context");
-	var tiddlers = wizardContext ? wizardContext.tiddlers : [];
-	for(t=0; t<rowNames.length; t++) {
-		var context = {
-			allowSynchronous:true,
-			tiddler:tiddlers[tiddlers.findByField("title",rowNames[t])]
-		};
-		adaptor.getTiddler(rowNames[t],context,wizard,me.onGetTiddler);
-	}
-	return false;
-};
-
-config.macros.importTiddlers.onGetTiddler = function(context,wizard)
-{
-	var me = config.macros.importTiddlers;
-	if(!context.status)
-		displayMessage("Error in importTiddlers.onGetTiddler: " + context.statusText);
-	var tiddler = context.tiddler;
-	store.suspendNotifications();
-	store.saveTiddler(tiddler.title, tiddler.title, tiddler.text, tiddler.modifier, tiddler.modified, tiddler.tags, tiddler.fields, true, tiddler.created);
-	if(!wizard.getValue("sync")) {
-		store.setValue(tiddler.title,'server',null);
-	}
-	store.resumeNotifications();
-	if(!context.isSynchronous)
-		store.notify(tiddler.title,true);
-	var remainingImports = wizard.getValue("remainingImports")-1;
-	wizard.setValue("remainingImports",remainingImports);
-	if(remainingImports == 0) {
-		if(context.isSynchronous) {
-			store.notifyAll();
-			refreshDisplay();
-		}
-		wizard.setButtons([
-				{caption: me.doneLabel, tooltip: me.donePrompt, onClick: me.onClose}
-			],me.statusDoneImport);
-		autoSaveChanges();
-	}
-};
-
-//--
-//-- Sync macro
-//--
-
-// Synchronisation handlers
-config.syncers = {};
-
-// Sync state.
-var currSync = null;
-
-// sync macro
-config.macros.sync.handler = function(place,macroName,params,wikifier,paramString,tiddler)
-{
-	if(!wikifier.isStatic)
-		this.startSync(place);
-};
-
-config.macros.sync.cancelSync = function()
-{
-	currSync = null;
-};
-
-config.macros.sync.startSync = function(place)
-{
-	if(currSync)
-		config.macros.sync.cancelSync();
-	currSync = {};
-	currSync.syncList = this.getSyncableTiddlers();
-	currSync.syncTasks = this.createSyncTasks(currSync.syncList);
-	this.preProcessSyncableTiddlers(currSync.syncList);
-	var wizard = new Wizard();
-	currSync.wizard = wizard;
-	wizard.createWizard(place,this.wizardTitle);
-	wizard.addStep(this.step1Title,this.step1Html);
-	var markList = wizard.getElement("markList");
-	var listWrapper = document.createElement("div");
-	markList.parentNode.insertBefore(listWrapper,markList);
-	currSync.listView = ListView.create(listWrapper,currSync.syncList,this.listViewTemplate);
-	this.processSyncableTiddlers(currSync.syncList);
-	wizard.setButtons([{caption: this.syncLabel, tooltip: this.syncPrompt, onClick: this.doSync}]);
-};
-
-config.macros.sync.getSyncableTiddlers = function()
-{
-	var list = [];
-	store.forEachTiddler(function(title,tiddler) {
-		var syncItem = {};
-		syncItem.serverType = tiddler.getServerType();
-		syncItem.serverHost = tiddler.fields['server.host'];
-		if(syncItem.serverType && syncItem.serverHost) {
-			syncItem.adaptor = new config.adaptors[syncItem.serverType]();
-			syncItem.serverHost = syncItem.adaptor.fullHostName(syncItem.serverHost);
-			syncItem.serverWorkspace = tiddler.fields['server.workspace'];
-			syncItem.tiddler = tiddler;
-			syncItem.title = tiddler.title;
-			syncItem.isTouched = tiddler.isTouched();
-			syncItem.selected = syncItem.isTouched;
-			syncItem.syncStatus = config.macros.sync.syncStatusList[syncItem.isTouched ? "changedLocally" : "none"];
-			syncItem.status = syncItem.syncStatus.text;
-			list.push(syncItem);
-		}
-		});
-	list.sort(function(a,b) {return a.title < b.title ? -1 : (a.title == b.title ? 0 : +1);});
-	return list;
-};
-
-config.macros.sync.preProcessSyncableTiddlers = function(syncList)
-{
-	var i;
-	for(i=0; i<syncList.length; i++) {
-		var si = syncList[i];
-		si.serverUrl = si.adaptor.generateTiddlerInfo(si.tiddler).uri;
-	}
-};
-
-config.macros.sync.processSyncableTiddlers = function(syncList)
-{
-	var i;
-	for(i=0; i<syncList.length; i++) {
-		var si = syncList[i];
-		if(si.syncStatus.display)
-			si.rowElement.style.display = si.syncStatus.display;
-		if(si.syncStatus.className)
-			si.rowElement.className = si.syncStatus.className;
-	}
-};
-
-config.macros.sync.createSyncTasks = function(syncList)
-{
-	var i,syncTasks = [];
-	for(i=0; i<syncList.length; i++) {
-		var si = syncList[i];
-		var j,r = null;
-		for(j=0; j<syncTasks.length; j++) {
-			var cst = syncTasks[j];
-			if(si.serverType == cst.serverType && si.serverHost == cst.serverHost && si.serverWorkspace == cst.serverWorkspace)
-				r = cst;
-		}
-		if(r) {
-			si.syncTask = r;
-			r.syncItems.push(si);
-		} else {
-			si.syncTask = this.createSyncTask(si);
-			syncTasks.push(si.syncTask);
-		}
-	}
-	return syncTasks;
-};
-
-config.macros.sync.createSyncTask = function(syncItem)
-{
-	var st = {};
-	st.serverType = syncItem.serverType;
-	st.serverHost = syncItem.serverHost;
-	st.serverWorkspace = syncItem.serverWorkspace;
-	st.syncItems = [syncItem];
-
-	var getTiddlerListCallback = function(context,sycnItems) {
-		var me = config.macros.sync;
-		if(!context.status) {
-			displayMessage(context.statusText);
-			return false;
-		}
-		syncItems = context.userParams;
-		var i,tiddlers = context.tiddlers;
-		for(i=0; i<syncItems.length; i++) {
-			var si = syncItems[i];
-			var f = tiddlers.findByField("title",si.title);
-			if(f !== null) {
-				if(tiddlers[f].fields['server.page.revision'] > si.tiddler.fields['server.page.revision']) {
-					si.syncStatus = me.syncStatusList[si.isTouched ? 'changedBoth' : 'changedServer'];
-				}
-			} else {
-				si.syncStatus = me.syncStatusList.notFound;
-			}
-			me.updateSyncStatus(si);
-		}
-		return true;
-	};
-
-	var openWorkspaceCallback = function(context,syncItems) {
-		if(context.status) {
-			context.adaptor.getTiddlerList(context,syncItems,getTiddlerListCallback);
-			return true;
-		}
-		displayMessage(context.statusText);
-		return false;
-	};
-
-	var context = {host:st.serverHost,workspace:st.serverWorkspace};
-	syncItem.adaptor.openHost(st.serverHost);
-	syncItem.adaptor.openWorkspace(st.serverWorkspace,context,st.syncItems,openWorkspaceCallback);
-	return st;
-};
-
-config.macros.sync.updateSyncStatus = function(syncItem)
-{
-	var e = syncItem.colElements["status"];
-	jQuery(e).empty();
-	createTiddlyText(e,syncItem.syncStatus.text);
-	syncItem.rowElement.style.display = syncItem.syncStatus.display;
-	if(syncItem.syncStatus.className)
-		syncItem.rowElement.className = syncItem.syncStatus.className;
-};
-
-config.macros.sync.doSync = function(e)
-{
-	var me = config.macros.sync;
-	var getTiddlerCallback = function(context,syncItem) {
-		if(syncItem) {
-			var tiddler = context.tiddler;
-			store.saveTiddler(tiddler.title,tiddler.title,tiddler.text,tiddler.modifier,tiddler.modified,tiddler.tags,tiddler.fields,true,tiddler.created);
-			syncItem.syncStatus = me.syncStatusList.gotFromServer;
-			me.updateSyncStatus(syncItem);
-		}
-	};
-	var putTiddlerCallback = function(context,syncItem) {
-		if(syncItem) {
-			store.resetTiddler(context.title);
-			syncItem.syncStatus = me.syncStatusList.putToServer;
-			me.updateSyncStatus(syncItem);
-		}
-	};
-
-	var rowNames = ListView.getSelectedRows(currSync.listView);
-	var i,sl = me.syncStatusList;
-	for(i=0; i<currSync.syncList.length; i++) {
-		var si = currSync.syncList[i];
-		if(rowNames.indexOf(si.title) != -1) {
-			var errorMsg = "Error in doSync: ";
-			try {
-				var r = true;
-				switch(si.syncStatus) {
-				case sl.changedServer:
-					var context = {"workspace": si.serverWorkspace};
-					r = si.adaptor.getTiddler(si.title,context,si,getTiddlerCallback);
-					break;
-				case sl.notFound:
-				case sl.changedLocally:
-				case sl.changedBoth:
-					r = si.adaptor.putTiddler(si.tiddler,null,si,putTiddlerCallback);
-					break;
-				default:
-					break;
-				}
-				if(!r)
-					displayMessage(errorMsg + r);
-			} catch(ex) {
-				if(ex.name == "TypeError")
-					displayMessage("sync operation unsupported: " + ex.message);
-				else
-					displayMessage(errorMsg + ex.message);
-			}
-		}
-	}
-	return false;
-};
-
-//--
 //-- Manager UI for groups of tiddlers
 //--
 
@@ -5638,10 +4891,6 @@ function refreshDisplay(hint)
 		hint = [hint];
 	var e = document.getElementById("contentWrapper");
 	refreshElements(e,hint);
-	if(backstage.isPanelVisible()) {
-		e = document.getElementById("backstage");
-		refreshElements(e,hint);
-	}
 }
 
 function refreshPageTitle()
@@ -6008,296 +5257,6 @@ function autoSaveChanges(onlyIfDirty,tiddlers)
 	if(config.options.chkAutoSave)
 		saveChanges(onlyIfDirty,tiddlers);
 }
-//--
-//-- Filesystem code
-//--
-
-function convertUTF8ToUnicode(u)
-{
-	return config.browser.isOpera || !window.netscape ? manualConvertUTF8ToUnicode(u) : mozConvertUTF8ToUnicode(u);
-}
-
-function manualConvertUTF8ToUnicode(utf)
-{
-	var uni = utf;
-	var src = 0;
-	var dst = 0;
-	var b1, b2, b3;
-	var c;
-	while(src < utf.length) {
-		b1 = utf.charCodeAt(src++);
-		if(b1 < 0x80) {
-			dst++;
-		} else if(b1 < 0xE0) {
-			b2 = utf.charCodeAt(src++);
-			c = String.fromCharCode(((b1 & 0x1F) << 6) | (b2 & 0x3F));
-			uni = uni.substring(0,dst++).concat(c,utf.substr(src));
-		} else {
-			b2 = utf.charCodeAt(src++);
-			b3 = utf.charCodeAt(src++);
-			c = String.fromCharCode(((b1 & 0xF) << 12) | ((b2 & 0x3F) << 6) | (b3 & 0x3F));
-			uni = uni.substring(0,dst++).concat(c,utf.substr(src));
-		}
-	}
-	return uni;
-}
-
-function mozConvertUTF8ToUnicode(u)
-{
-	try {
-		netscape.security.PrivilegeManager.enablePrivilege("UniversalXPConnect");
-		var converter = Components.classes["@mozilla.org/intl/scriptableunicodeconverter"].createInstance(Components.interfaces.nsIScriptableUnicodeConverter);
-		converter.charset = "UTF-8";
-	} catch(ex) {
-		return manualConvertUTF8ToUnicode(u);
-	} // fallback
-	var s = converter.ConvertToUnicode(u);
-	var fin = converter.Finish();
-	return fin.length > 0 ? s+fin : s;
-}
-
-function convertUnicodeToFileFormat(s)
-{
-	return config.browser.isOpera || !window.netscape ? (config.browser.isIE ? convertUnicodeToHtmlEntities(s) : s) : mozConvertUnicodeToUTF8(s);
-}
-
-function convertUnicodeToHtmlEntities(s)
-{
-	var re = /[^\u0000-\u007F]/g;
-	return s.replace(re,function($0) {return "&#" + $0.charCodeAt(0).toString() + ";";});
-}
-
-function convertUnicodeToUTF8(s)
-{
-// return convertUnicodeToFileFormat to allow plugin migration
-	return convertUnicodeToFileFormat(s);
-}
-
-function manualConvertUnicodeToUTF8(s)
-{
-	return unescape(encodeURIComponent(s));
-}
-
-function mozConvertUnicodeToUTF8(s)
-{
-	try {
-		netscape.security.PrivilegeManager.enablePrivilege("UniversalXPConnect");
-		var converter = Components.classes["@mozilla.org/intl/scriptableunicodeconverter"].createInstance(Components.interfaces.nsIScriptableUnicodeConverter);
-		converter.charset = "UTF-8";
-	} catch(ex) {
-		return manualConvertUnicodeToUTF8(s);
-	} // fallback
-	var u = converter.ConvertFromUnicode(s);
-	var fin = converter.Finish();
-	return fin.length > 0 ? u + fin : u;
-}
-
-function convertUriToUTF8(uri,charSet)
-{
-	if(window.netscape == undefined || charSet == undefined || charSet == "")
-		return uri;
-	try {
-		netscape.security.PrivilegeManager.enablePrivilege("UniversalXPConnect");
-		var converter = Components.classes["@mozilla.org/intl/utf8converterservice;1"].getService(Components.interfaces.nsIUTF8ConverterService);
-	} catch(ex) {
-		return uri;
-	}
-	return converter.convertURISpecToUTF8(uri,charSet);
-}
-
-function copyFile(dest,source)
-{
-	return config.browser.isIE ? ieCopyFile(dest,source) : false;
-}
-
-function saveFile(fileUrl,content)
-{
-	var r = mozillaSaveFile(fileUrl,content);
-	if(!r)
-		r = ieSaveFile(fileUrl,content);
-	if(!r)
-		r = javaSaveFile(fileUrl,content);
-	return r;
-}
-
-function loadFile(fileUrl)
-{
-	var r = mozillaLoadFile(fileUrl);
-	if((r == null) || (r == false))
-		r = ieLoadFile(fileUrl);
-	if((r == null) || (r == false))
-		r = javaLoadFile(fileUrl);
-	return r;
-}
-
-function ieCreatePath(path)
-{
-	try {
-		var fso = new ActiveXObject("Scripting.FileSystemObject");
-	} catch(ex) {
-		return null;
-	}
-
-	var pos = path.lastIndexOf("\\");
-	if(pos==-1)
-		pos = path.lastIndexOf("/");
-	if(pos!=-1)
-		path = path.substring(0,pos+1);
-
-	var scan = [path];
-	var parent = fso.GetParentFolderName(path);
-	while(parent && !fso.FolderExists(parent)) {
-		scan.push(parent);
-		parent = fso.GetParentFolderName(parent);
-	}
-
-	for(i=scan.length-1;i>=0;i--) {
-		if(!fso.FolderExists(scan[i])) {
-			fso.CreateFolder(scan[i]);
-		}
-	}
-	return true;
-}
-
-// Returns null if it can't do it, false if there's an error, true if it saved OK
-function ieSaveFile(filePath,content)
-{
-	ieCreatePath(filePath);
-	try {
-		var fso = new ActiveXObject("Scripting.FileSystemObject");
-	} catch(ex) {
-		return null;
-	}
-	var file = fso.OpenTextFile(filePath,2,-1,0);
-	file.Write(content);
-	file.Close();
-	return true;
-}
-
-// Returns null if it can't do it, false if there's an error, or a string of the content if successful
-function ieLoadFile(filePath)
-{
-	try {
-		var fso = new ActiveXObject("Scripting.FileSystemObject");
-		var file = fso.OpenTextFile(filePath,1);
-		var content = file.ReadAll();
-		file.Close();
-	} catch(ex) {
-		return null;
-	}
-	return content;
-}
-
-function ieCopyFile(dest,source)
-{
-	ieCreatePath(dest);
-	try {
-		var fso = new ActiveXObject("Scripting.FileSystemObject");
-		fso.GetFile(source).Copy(dest);
-	} catch(ex) {
-		return false;
-	}
-	return true;
-}
-
-// Returns null if it can't do it, false if there's an error, true if it saved OK
-function mozillaSaveFile(filePath,content)
-{
-	if(window.Components) {
-		try {
-			netscape.security.PrivilegeManager.enablePrivilege("UniversalXPConnect");
-			var file = Components.classes["@mozilla.org/file/local;1"].createInstance(Components.interfaces.nsILocalFile);
-			file.initWithPath(filePath);
-			if(!file.exists())
-				file.create(0,0x01B4);// 0x01B4 = 0664
-			var out = Components.classes["@mozilla.org/network/file-output-stream;1"].createInstance(Components.interfaces.nsIFileOutputStream);
-			out.init(file,0x22,0x04,null);
-			out.write(content,content.length);
-			out.flush();
-			out.close();
-			return true;
-		} catch(ex) {
-			return false;
-		}
-	}
-	return null;
-}
-
-// Returns null if it can't do it, false if there's an error, or a string of the content if successful
-function mozillaLoadFile(filePath)
-{
-	if(window.Components) {
-		try {
-			netscape.security.PrivilegeManager.enablePrivilege("UniversalXPConnect");
-			var file = Components.classes["@mozilla.org/file/local;1"].createInstance(Components.interfaces.nsILocalFile);
-			file.initWithPath(filePath);
-			if(!file.exists())
-				return null;
-			var inputStream = Components.classes["@mozilla.org/network/file-input-stream;1"].createInstance(Components.interfaces.nsIFileInputStream);
-			inputStream.init(file,0x01,0x04,null);
-			var sInputStream = Components.classes["@mozilla.org/scriptableinputstream;1"].createInstance(Components.interfaces.nsIScriptableInputStream);
-			sInputStream.init(inputStream);
-			var contents = sInputStream.read(sInputStream.available());
-			sInputStream.close();
-			inputStream.close();
-			return contents;
-		} catch(ex) {
-			return false;
-		}
-	}
-	return null;
-}
-
-function javaUrlToFilename(url)
-{
-	var f = "//localhost";
-	if(url.indexOf(f) == 0)
-		return url.substring(f.length);
-	var i = url.indexOf(":");
-	return i > 0 ? url.substring(i-1) : url;
-}
-
-function javaSaveFile(filePath,content)
-{
-	try {
-		if(document.applets["TiddlySaver"])
-			return document.applets["TiddlySaver"].saveFile(javaUrlToFilename(filePath),"UTF-8",content);
-	} catch(ex) {
-	}
-	try {
-		var s = new java.io.PrintStream(new java.io.FileOutputStream(javaUrlToFilename(filePath)));
-		s.print(content);
-		s.close();
-	} catch(ex2) {
-		return null;
-	}
-	return true;
-}
-
-function javaLoadFile(filePath)
-{
-	try {
-		if(document.applets["TiddlySaver"]) {
-			var ret = document.applets["TiddlySaver"].loadFile(javaUrlToFilename(filePath),"UTF-8");
-			if(!ret)
-				return null;
-			return String(ret);
-		}
-	} catch(ex) {
-	}
-	var content = [];
-	try {
-		var r = new java.io.BufferedReader(new java.io.FileReader(javaUrlToFilename(filePath)));
-		var line;
-		while((line = r.readLine()) != null)
-			content.push(String(line));
-		r.close();
-	} catch(ex2) {
-		return null;
-	}
-	return content.join("\n");
-}
-
 //--
 //-- Server adaptor base class
 //--
@@ -9232,330 +8191,291 @@ config.macros.importTiddlers.onOpen = function(ev) {
 
 })(jQuery);
 //}}}
-/***
-|''Name''|TiddlyWebConfig|
-|''Description''|configuration settings for TiddlyWebWiki|
-|''Author''|FND|
-|''Version''|1.3.2|
-|''Status''|stable|
-|''Source''|http://svn.tiddlywiki.org/Trunk/association/plugins/TiddlyWebConfig.js|
-|''License''|[[BSD|http://www.opensource.org/licenses/bsd-license.php]]|
-|''Requires''|TiddlyWebAdaptor ServerSideSavingPlugin|
-|''Keywords''|serverSide TiddlyWeb|
-!Code
-***/
-//{{{
-(function($) {
-$(document).ready(function() {
+//--
+//-- Main
+//--
+var params = null; // Command line parameters
+var store = null; // TiddlyWiki storage
+var story = null; // Main story
+var formatter = null; // Default formatters for the wikifier
+var anim = typeof Animator == "function" ? new Animator() : null; // Animation engine
+var readOnly = false; // Whether we're in readonly mode
+var highlightHack = null; // Embarrassing hack department...
+var hadConfirmExit = false; // Don't warn more than once
+var safeMode = false; // Disable all plugins and cookies
+var showBackstage; // Whether to include the backstage area
+var installedPlugins = []; // Information filled in when plugins are executed
+var startingUp = false; // Whether we're in the process of starting up
+var pluginInfo,tiddler; // Used to pass information to plugins in loadPlugins()
 
-if(!config.extensions.ServerSideSavingPlugin) {
-	throw "Missing dependency: ServerSideSavingPlugin";
-}
-if(!config.adaptors.tiddlyweb) {
-	throw "Missing dependency: TiddlyWebAdaptor";
-}
+jQuery(document).ready(function() {
 
-config.options.chkAutoSave = true;
+jQuery("#contentWrapper").addClass("loading").text("Loading your TiddlyWiki...");
 
-var adaptor = new config.adaptors.tiddlyweb();
-var host, workspace;
-try {
-	var json = JSON.parse($("#tiddlywikiconfig").text());
-	host = json.host || "/";
-	workspace = json.workspace || "bags/common";
-} catch(e) {
-	throw 'Failed to parse <script id="tiddlywikiconfig">{"workspace": "bags/common", "host": "/" }</script>';
-}
-
-var plugin = config.extensions.tiddlyweb = {
-	host: host.replace(/\/$/, ""),
-	username: null,
-	status: {},
-
-	getStatus: null, // assigned later
-	getUserInfo: function(callback) {
-		this.getStatus(function(status) {
-			callback({
-				name: plugin.username,
-				anon: plugin.username ? plugin.username == "GUEST" : true
-			});
-		});
-	},
-	hasPermission: function(type, tiddler) {
-		var perms = tiddler.fields["server.permissions"];
-		if(perms) {
-			return perms.split(", ").contains(type);
-		} else {
-			return true;
-		}
-	}
-};
-
-config.defaultCustomFields = {
-	"server.type": "tiddlyweb",
-	"server.host": plugin.host,
-	"server.workspace": workspace
-};
-
-// modify toolbar commands
-
-config.shadowTiddlers.ToolbarCommands = config.shadowTiddlers.ToolbarCommands.
-	replace("syncing ", "revisions syncing ");
-
-config.commands.saveTiddler.isEnabled = function(tiddler) {
-	return plugin.hasPermission("write", tiddler) && !tiddler.isReadOnly();
-};
-
-config.commands.deleteTiddler.isEnabled = function(tiddler) {
-	return !readOnly && plugin.hasPermission("delete", tiddler);
-};
-
-// hijack option macro to disable username editing
-var _optionMacro = config.macros.option.handler;
-config.macros.option.handler = function(place, macroName, params, wikifier,
-		paramString) {
-	if(params[0] == "txtUserName") {
-		params[0] = "options." + params[0];
-		var self = this;
-		var args = arguments;
-		args[0] = $("<span />").appendTo(place)[0];
-		plugin.getUserInfo(function(user) {
-			config.macros.message.handler.apply(self, args);
-		});
-	} else {
-		_optionMacro.apply(this, arguments);
-	}
-};
-
-// hijack isReadOnly to take into account permissions and content type
-var _isReadOnly = Tiddler.prototype.isReadOnly;
-Tiddler.prototype.isReadOnly = function() {
-	return _isReadOnly.apply(this, arguments) ||
-		!plugin.hasPermission("write", this);
-};
-
-var getStatus = function(callback) {
-	if(plugin.status.version) {
-		callback(plugin.status);
-	} else {
-		var self = getStatus;
-		if(self.pending) {
-			if(callback) {
-				self.queue.push(callback);
+ajaxReq({ dataType: "json", url: "/status", success: function(status) {
+	var host = window.location.protocol + "//" + window.location.hostname;
+	var workspace = "recipes/" + status["space"]["recipe"];
+	config.defaultCustomFields = {
+		"server.workspace": workspace,
+		"server.type": "tiddlyweb",
+		"server.host": host
+	};
+	var defaults = config.defaultCustomFields;
+	var filter = "?select=tag:excludeLists&type:!text/css&select=type:!text/html&select=type:!image/png&select=type:!image/jpg&select=type:!image/gif&select=type:!image/jpeg";
+	var time = 0, start = 0, total = 20;
+	var lazy_load_content = function(title) {
+		window.setTimeout(function() {
+			if(time < 0) {
+				return;
 			}
-		} else {
-			self.pending = true;
-			self.queue = callback ? [callback] : [];
-			var _callback = function(context, userParams) {
-				var status = context.serverStatus || {};
-				for(var key in status) {
-					if(key == "username") {
-						plugin.username = status[key];
-						config.macros.option.propagateOption("txtUserName",
-							"value", plugin.username, "input");
+			ajaxReq({
+				dataType: "json",
+				data: {
+					"fat": "y"
+				},
+				url: host + "/tiddlers?sort=-modified&limit=" + start + "," + total,
+				success: function(tids) {
+					for(var i = 0; i < tids.length; i++) {
+						var tid = config.adaptors.tiddlyweb.toTiddler(tids[i], host);
+						store.addTiddler(tid);
+					}
+					if(tids.length === 0) {
+						time = -1;
 					} else {
-						plugin.status[key] = status[key];
+						refreshDisplay();
+						start += 20;
+						time += 1000;
+						lazy_load_content(title);
+					}
+				},
+			});
+		}, time);
+	}
+	var success = function(json) {
+		store = new TiddlyWiki({config:config});
+		invokeParamifier(params,"oninit");
+		story = new Story("tiddlerDisplay","tiddler");
+		jQuery("#contentWrapper").removeClass("loading");
+		for(var i = 0; i < json.length; i++) {
+			var title = json[i].title;
+			if(["ServerSideSavingPlugin",
+				"TiddlySpaceInit", "TiddlyWebAdaptor", "LoadMissingTiddlersPlugin"].indexOf(title) === -1) {
+				var tid = config.adaptors.tiddlyweb.toTiddler(json[i], host);
+				store.addTiddler(tid);
+			}
+		}
+		lazy_load_content();
+		main();
+	};
+	ajaxReq({
+		dataType: "json",
+		data: {
+			"fat": "y"
+		},
+		url: host + "/" + workspace + "/tiddlers" + filter,
+		success: function(tiddlers) {
+			success(tiddlers);
+		},
+		error: function() {
+			jQuery("#contentWrapper").addClass("error").text("Error occurred loading your tiddlers");
+		}
+	});
+}});
+});
+
+// Starting up
+function main()
+{
+	var t10,t9,t8,t7,t6,t5,t4,t3,t2,t1,t0 = new Date();
+	startingUp = true;
+	var doc = jQuery(document);
+	jQuery.noConflict();
+	window.onbeforeunload = function(e) {if(window.confirmExit) return confirmExit();};
+	params = getParameters();
+	if(params)
+		params = params.parseParams("open",null,false);
+	addEvent(document,"click",Popup.onDocumentClick);
+	var s;
+	for(s=0; s<config.notifyTiddlers.length; s++)
+		store.addNotification(config.notifyTiddlers[s].name,config.notifyTiddlers[s].notify);
+	t1 = new Date();
+	loadShadowTiddlers();
+	doc.trigger("loadShadows");
+	t2 = new Date();
+	store.loadFromDiv("storeArea","store",true);
+	doc.trigger("loadTiddlers");
+	loadOptions();
+	t3 = new Date();
+	invokeParamifier(params,"onload");
+	t4 = new Date();
+	readOnly = (window.location.protocol == "file:") ? false : config.options.chkHttpReadOnly;
+	var pluginProblem = loadPlugins("systemConfig");
+	doc.trigger("loadPlugins");
+	t5 = new Date();
+	formatter = new Formatter(config.formatters);
+	invokeParamifier(params,"onconfig");
+	story.switchTheme(config.options.txtTheme);
+	showBackstage = showBackstage !== undefined ? showBackstage : !readOnly;
+	t6 = new Date();
+	var m;
+	for(m in config.macros) {
+		if(config.macros[m].init)
+			config.macros[m].init();
+	}
+	t7 = new Date();
+	store.notifyAll();
+	t8 = new Date();
+	restart();
+	refreshDisplay();
+	t9 = new Date();
+	if(pluginProblem) {
+		story.displayTiddler(null,"PluginManager");
+		displayMessage(config.messages.customConfigError);
+	}
+	t10 = new Date();
+	if(config.options.chkDisplayInstrumentation) {
+		displayMessage("LoadShadows " + (t2-t1) + " ms");
+		displayMessage("LoadFromDiv " + (t3-t2) + " ms");
+		displayMessage("LoadPlugins " + (t5-t4) + " ms");
+		displayMessage("Macro init " + (t7-t6) + " ms");
+		displayMessage("Notify " + (t8-t7) + " ms");
+		displayMessage("Restart " + (t9-t8) + " ms");
+		displayMessage("Total: " + (t10-t0) + " ms");
+	}
+	startingUp = false;
+	doc.trigger("startup");
+}
+
+// Called on unload. All functions called conditionally since they themselves may have been unloaded.
+function unload()
+{
+	if(window.checkUnsavedChanges)
+		checkUnsavedChanges();
+	if(window.scrubNodes)
+		scrubNodes(document.body);
+}
+
+// Restarting
+function restart()
+{
+	invokeParamifier(params,"onstart");
+	if(story.isEmpty()) {
+		story.displayDefaultTiddlers();
+	}
+	window.scrollTo(0,0);
+}
+
+function loadShadowTiddlers()
+{
+	var shadows = new TiddlyWiki();
+	shadows.loadFromDiv("shadowArea","shadows",true);
+	shadows.forEachTiddler(function(title,tiddler){config.shadowTiddlers[title] = tiddler.text;});
+}
+
+function loadPlugins(tag)
+{
+	if(safeMode)
+		return false;
+	var tiddlers = store.getTaggedTiddlers(tag);
+	tiddlers.sort(function(a,b) {return a.title < b.title ? -1 : (a.title == b.title ? 0 : 1);});
+	var toLoad = [];
+	var nLoaded = 0;
+	var map = {};
+	var nPlugins = tiddlers.length;
+	installedPlugins = [];
+	var i;
+	for(i=0; i<nPlugins; i++) {
+		var p = getPluginInfo(tiddlers[i]);
+		installedPlugins[i] = p;
+		var n = p.Name || p.title;
+		if(n)
+			map[n] = p;
+		n = p.Source;
+		if(n)
+			map[n] = p;
+	}
+	var visit = function(p) {
+		if(!p || p.done)
+			return;
+		p.done = 1;
+		var reqs = p.Requires;
+		if(reqs) {
+			reqs = reqs.readBracketedList();
+			var i;
+			for(i=0; i<reqs.length; i++)
+				visit(map[reqs[i]]);
+		}
+		toLoad.push(p);
+	};
+	for(i=0; i<nPlugins; i++)
+		visit(installedPlugins[i]);
+	for(i=0; i<toLoad.length; i++) {
+		p = toLoad[i];
+		pluginInfo = p;
+		tiddler = p.tiddler;
+		if(isPluginExecutable(p)) {
+			if(isPluginEnabled(p)) {
+				p.executed = true;
+				var startTime = new Date();
+				try {
+					if(tiddler.text)
+						window.eval(tiddler.text);
+					nLoaded++;
+				} catch(ex) {
+					p.log.push(config.messages.pluginError.format([exceptionText(ex)]));
+					p.error = true;
+					if(!console.tiddlywiki) {
+						console.log("error evaluating " + tiddler.title, ex);
 					}
 				}
-				for(var i = 0; i < self.queue.length; i++) {
-					self.queue[i](plugin.status);
-				}
-				delete self.queue;
-				delete self.pending;
-			};
-			adaptor.getStatus({ host: plugin.host }, null, _callback);
-		}
-	}
-};
-(plugin.getStatus = getStatus)(); // XXX: hacky (arcane combo of assignment plus execution)
-
-});
-})(jQuery);
-//}}}
-//--
-//-- Backstage
-//--
-// Backstage tasks
-config.tasks.save.action = saveChanges;
-
-var backstage = {
-	area: null,
-	toolbar: null,
-	button: null,
-	showButton: null,
-	hideButton: null,
-	cloak: null,
-	panel: null,
-	panelBody: null,
-	panelFooter: null,
-	currTabName: null,
-	currTabElem: null,
-	content: null,
-
-	init: function() {
-		var cmb = config.messages.backstage;
-		this.area = document.getElementById("backstageArea");
-		this.toolbar = jQuery("#backstageToolbar").empty()[0];
-		this.button = jQuery("#backstageButton").empty()[0];
-		this.button.style.display = "block";
-		var t = cmb.open.text + " " + glyph("bentArrowLeft");
-		this.showButton = createTiddlyButton(this.button,t,cmb.open.tooltip,
-						function(e) {backstage.show(); return false;},null,"backstageShow");
-		t = glyph("bentArrowRight") + " " + cmb.close.text;
-		this.hideButton = createTiddlyButton(this.button,t,cmb.close.tooltip,
-						function(e) {backstage.hide(); return false;},null,"backstageHide");
-		this.cloak = document.getElementById("backstageCloak");
-		this.panel = document.getElementById("backstagePanel");
-		this.panelFooter = createTiddlyElement(this.panel,"div",null,"backstagePanelFooter");
-		this.panelBody = createTiddlyElement(this.panel,"div",null,"backstagePanelBody");
-		this.cloak.onmousedown = function(e) {backstage.switchTab(null);};
-		createTiddlyText(this.toolbar,cmb.prompt);
-		for(t=0; t<config.backstageTasks.length; t++) {
-			var taskName = config.backstageTasks[t];
-			var task = config.tasks[taskName];
-			var handler = task.action ? this.onClickCommand : this.onClickTab;
-			var text = task.text + (task.action ? "" : glyph("downTriangle"));
-			var btn = createTiddlyButton(this.toolbar,text,task.tooltip,handler,"backstageTab");
-			jQuery(btn).addClass(task.action ? "backstageAction" : "backstageTask");
-			btn.setAttribute("task", taskName);
-			}
-		this.content = document.getElementById("contentWrapper");
-		if(config.options.chkBackstage)
-			this.show();
-		else
-			this.hide();
-	},
-
-	isVisible: function() {
-		return this.area ? this.area.style.display == "block" : false;
-	},
-
-	show: function() {
-		this.area.style.display = "block";
-		if(anim && config.options.chkAnimate) {
-			backstage.toolbar.style.left = findWindowWidth() + "px";
-			var p = [{style: "left", start: findWindowWidth(), end: 0, template: "%0px"}];
-			anim.startAnimating(new Morpher(backstage.toolbar,config.animDuration,p));
-		} else {
-			backstage.area.style.left = "0px";
-		}
-		jQuery(this.showButton).hide();
-		jQuery(this.hideButton).show();
-		config.options.chkBackstage = true;
-		saveOption("chkBackstage");
-		jQuery(this.content).addClass("backstageVisible");
-	},
-
-	hide: function() {
-		if(this.currTabElem) {
-			this.switchTab(null);
-		} else {
-			backstage.toolbar.style.left = "0px";
-			if(anim && config.options.chkAnimate) {
-				var p = [{style: "left", start: 0, end: findWindowWidth(), template: "%0px"}];
-				var c = function(element,properties) {backstage.area.style.display = "none";};
-				anim.startAnimating(new Morpher(backstage.toolbar,config.animDuration,p,c));
+				pluginInfo.startupTime = String((new Date()) - startTime) + "ms";
 			} else {
-				this.area.style.display = "none";
+				nPlugins--;
 			}
-			this.showButton.style.display = "block";
-			this.hideButton.style.display = "none";
-			config.options.chkBackstage = false;
-			saveOption("chkBackstage");
-			jQuery(this.content).removeClass("backstageVisible");
-		}
-	},
-
-	onClickCommand: function(e) {
-		var task = config.tasks[this.getAttribute("task")];
-		if(task.action) {
-			backstage.switchTab(null);
-			task.action();
-		}
-		return false;
-	},
-
-	onClickTab: function(e) {
-		backstage.switchTab(this.getAttribute("task"));
-		return false;
-	},
-
-	// Switch to a given tab, or none if null is passed
-	switchTab: function(tabName) {
-		var tabElem = null;
-		var e = this.toolbar.firstChild;
-		while(e) {
-			if(e.getAttribute && e.getAttribute("task") == tabName)
-				tabElem = e;
-			e = e.nextSibling;
-		}
-		if(tabName == backstage.currTabName) {
-			backstage.hidePanel();
-			return;
-		}
-		if(backstage.currTabElem) {
-			jQuery(this.currTabElem).removeClass("backstageSelTab");
-		}
-		if(tabElem && tabName) {
-			backstage.preparePanel();
-			jQuery(tabElem).addClass("backstageSelTab");
-			var task = config.tasks[tabName];
-			wikify(task.content,backstage.panelBody,null,null);
-			backstage.showPanel();
-		} else if(backstage.currTabElem) {
-			backstage.hidePanel();
-		}
-		backstage.currTabName = tabName;
-		backstage.currTabElem = tabElem;
-	},
-
-	isPanelVisible: function() {
-		return backstage.panel ? backstage.panel.style.display == "block" : false;
-	},
-
-	preparePanel: function() {
-		backstage.cloak.style.height = findWindowHeight() + "px";
-		backstage.cloak.style.display = "block";
-		jQuery(backstage.panelBody).empty();
-		return backstage.panelBody;
-	},
-
-	showPanel: function() {
-		backstage.panel.style.display = "block";
-		if(anim && config.options.chkAnimate) {
-			backstage.panel.style.top = (-backstage.panel.offsetHeight) + "px";
-			var p = [{style: "top", start: -backstage.panel.offsetHeight, end: 0, template: "%0px"}];
-			anim.startAnimating(new Morpher(backstage.panel,config.animDuration,p),new Scroller(backstage.panel,false));
 		} else {
-			backstage.panel.style.top = "0px";
-		}
-		return backstage.panelBody;
-	},
-
-	hidePanel: function() {
-		if(backstage.currTabElem)
-			jQuery(backstage.currTabElem).removeClass("backstageSelTab");
-		backstage.currTabElem = null;
-		backstage.currTabName = null;
-		if(anim && config.options.chkAnimate) {
-			var p = [
-				{style: "top", start: 0, end: -(backstage.panel.offsetHeight), template: "%0px"},
-				{style: "display", atEnd: "none"}
-			];
-			var c = function(element,properties) {backstage.cloak.style.display = "none";};
-			anim.startAnimating(new Morpher(backstage.panel,config.animDuration,p,c));
-		} else {
-			jQuery([backstage.panel,backstage.cloak]).hide();
+			p.warning = true;
 		}
 	}
-};
+	return nLoaded != nPlugins;
+}
 
-config.macros.backstage = {};
-
-config.macros.backstage.handler = function(place,macroName,params)
+function getPluginInfo(tiddler)
 {
-	var backstageTask = config.tasks[params[0]];
-	if(backstageTask)
-		createTiddlyButton(place,backstageTask.text,backstageTask.tooltip,function(e) {backstage.switchTab(params[0]); return false;});
-};
+	var p = store.getTiddlerSlices(tiddler.title,["Name","Description","Version","Requires","CoreVersion","Date","Source","Author","License","Browsers"]);
+	p.tiddler = tiddler;
+	p.title = tiddler.title;
+	p.log = [];
+	return p;
+}
+
+// Check that a particular plugin is valid for execution
+function isPluginExecutable(plugin)
+{
+	if(plugin.tiddler.isTagged("systemConfigForce")) {
+		plugin.log.push(config.messages.pluginForced);
+		return true;
+	}
+	if(plugin["CoreVersion"]) {
+		var coreVersion = plugin["CoreVersion"].split(".");
+		var w = parseInt(coreVersion[0],10) - version.major;
+		if(w == 0 && coreVersion[1])
+			w = parseInt(coreVersion[1],10) - version.minor;
+		if(w == 0 && coreVersion[2])
+			w = parseInt(coreVersion[2],10) - version.revision;
+		if(w > 0) {
+			plugin.log.push(config.messages.pluginVersionError);
+			return false;
+		}
+	}
+	return true;
+}
+
+function isPluginEnabled(plugin)
+{
+	if(plugin.tiddler.isTagged("systemConfigDisable")) {
+		plugin.log.push(config.messages.pluginDisabled);
+		return false;
+	}
+	return true;
+}
 
