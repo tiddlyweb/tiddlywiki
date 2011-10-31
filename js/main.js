@@ -14,11 +14,42 @@ var showBackstage; // Whether to include the backstage area
 var installedPlugins = []; // Information filled in when plugins are executed
 var startingUp = false; // Whether we're in the process of starting up
 var pluginInfo,tiddler; // Used to pass information to plugins in loadPlugins()
+var notReadOnly;
 
 jQuery(document).ready(function() {
 	jQuery("#contentWrapper").addClass("loading").text("Loading your TiddlyWiki...");
 	var defaults = config.defaultCustomFields;
 	var filter = "?select=tag:excludeLists&type:!text/css&select=type:!text/html&select=type:!image/png&select=type:!image/jpg&select=type:!image/gif&select=type:!image/jpeg";
+	var host = defaults["server.host"];
+	var time = 0, start = 0, total = 20;
+	var lazy_load_content = function(title) {
+		window.setTimeout(function() {
+			if(time < 0) {
+				return;
+			}
+			ajaxReq({
+				dataType: "json",
+				data: {
+					"fat": "y"
+				},
+				url: host + "/tiddlers?sort=-modified&limit=" + start + "," + total,
+				success: function(tids) {
+					for(var i = 0; i < tids.length; i++) {
+						var tid = config.adaptors.tiddlyweb.toTiddler(tids[i], host);
+						store.addTiddler(tid);
+					}
+					if(tids.length === 0) {
+						time = -1;
+					} else {
+						refreshDisplay();
+						start += 20;
+						time += 1000;
+						lazy_load_content(title);
+					}
+				},
+			});
+		}, time);
+	}
 	var success = function(json) {
 		store = new TiddlyWiki({config:config});
 		invokeParamifier(params,"oninit");
@@ -32,7 +63,12 @@ jQuery(document).ready(function() {
 				store.addTiddler(tid);
 			}
 		}
+		lazy_load_content();
 		main();
+		if(notReadOnly) {
+			readOnly = false;
+			refreshAll();
+		}
 	};
 	ajaxReq({
 		dataType: "json",
@@ -40,7 +76,10 @@ jQuery(document).ready(function() {
 			"fat": "y"
 		},
 		url: defaults["server.host"] + "/recipes/" + space + "_private" + "/tiddlers" + filter,
-		success: success,
+		success: function(tiddlers) {
+			notReadOnly = true;
+			success(tiddlers);
+		},
 		error: function() {
 			ajaxReq({
 				dataType: "json",
