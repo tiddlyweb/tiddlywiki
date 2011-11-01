@@ -53,7 +53,7 @@ Story.prototype.forEachTiddler = function(fn)
 
 Story.prototype.displayDefaultTiddlers = function()
 {
-	this.displayTiddlers(null,store.filterTiddlers(store.getTiddlerText("DefaultTiddlers")));
+	this.displayTiddlers(null,store.filterTiddlers(store.getTiddlerText("DefaultTiddlers")),null,null,null,String.encodeHashMap(config.defaultCustomFields));
 };
 
 //# Display several tiddlers given their titles in an array. Parameters same as displayTiddler(), except:
