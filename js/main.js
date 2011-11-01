@@ -1,6 +1,7 @@
 //--
 //-- Main
 //--
+
 var params = null; // Command line parameters
 var store = null; // TiddlyWiki storage
 var story = null; // Main story
@@ -19,6 +20,12 @@ jQuery(document).ready(function() {
 
 jQuery("#contentWrapper").addClass("loading").text("Loading your TiddlyWiki...");
 
+var total_tiddlers = -1;
+ajaxReq({ dataType: "text", url: "/tiddlers", success: function(text) {
+	total_tiddlers = text.split("\n").length;
+}
+});
+
 ajaxReq({ dataType: "json", url: "/status", success: function(status) {
 	var host = window.location.protocol + "//" + window.location.hostname;
 	var workspace = "recipes/" + status["space"]["recipe"];
@@ -29,7 +36,7 @@ ajaxReq({ dataType: "json", url: "/status", success: function(status) {
 	};
 	var defaults = config.defaultCustomFields;
 	var filter = "?select=tag:excludeLists&type:!text/css&select=type:!text/html&select=type:!image/png&select=type:!image/jpg&select=type:!image/gif&select=type:!image/jpeg";
-	var time = 0, start = 0, total = 20;
+	var time = 0, start = 0, total = 50;
 	var lazy_load_content = function(title) {
 		window.setTimeout(function() {
 			if(time < 0) {
@@ -46,12 +53,16 @@ ajaxReq({ dataType: "json", url: "/status", success: function(status) {
 						var tid = config.adaptors.tiddlyweb.toTiddler(tids[i], host);
 						store.addTiddler(tid);
 					}
+					if(total_tiddlers > -1) {
+						var pc = 100 - Math.floor(((total_tiddlers - store.getTiddlers().length) / total_tiddlers) * 100);
+						displayMessage(pc + "% of document loaded.");
+					}
 					if(tids.length === 0) {
 						time = -1;
 					} else {
 						refreshDisplay();
-						start += 20;
-						time += 1000;
+						start += total;
+						time += 100;
 						lazy_load_content(title);
 					}
 				},
