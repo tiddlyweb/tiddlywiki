@@ -18,7 +18,7 @@ var pluginInfo,tiddler; // Used to pass information to plugins in loadPlugins()
 
 jQuery(document).ready(function() {
 
-jQuery("#contentWrapper").addClass("loading").text("Loading your TiddlyWiki...");
+jQuery("#contentWrapper").addClass("loading").text("Loading Space...");
 
 var total_tiddlers = -1;
 ajaxReq({ dataType: "text", url: "/tiddlers", success: function(text) {
