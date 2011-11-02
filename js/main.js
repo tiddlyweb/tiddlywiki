@@ -53,13 +53,13 @@ ajaxReq({ dataType: "json", url: "/status", success: function(status) {
 						var tid = config.adaptors.tiddlyweb.toTiddler(tids[i], host);
 						store.addTiddler(tid);
 					}
-					if(total_tiddlers > -1) {
-						var pc = 100 - Math.floor(((total_tiddlers - store.getTiddlers().length) / total_tiddlers) * 100);
-						displayMessage(pc + "% of document loaded.");
-					}
 					if(tids.length === 0) {
 						time = -1;
 					} else {
+						if(total_tiddlers > -1) {
+							var pc = 100 - Math.floor(((total_tiddlers - store.getTiddlers().length) / total_tiddlers) * 100);
+							displayMessage(pc + "% of document loaded.");
+						}
 						refreshDisplay();
 						start += total;
 						time += 100;
