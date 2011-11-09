@@ -1,3 +1,6 @@
+//--
+//-- Filesystem utilities
+//--
 function convertUTF8ToUnicode(u)
 {
 	return config.browser.isOpera || !window.netscape ? manualConvertUTF8ToUnicode(u) : mozConvertUTF8ToUnicode(u);

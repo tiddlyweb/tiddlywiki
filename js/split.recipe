@@ -1,5 +1,4 @@
 version: Version.js
-js: FileSystemUtils.js
 js: Guide.js
 js: Config.js
 js: ConfigBrowser.js
@@ -24,6 +23,7 @@ js: Messages.js
 js: Refresh.js
 js: Options.js
 js: SavingCommon.js
+js: FileSystemUtils.js
 js: AdaptorBase.js
 js: Http.js
 js: Utilities.js
