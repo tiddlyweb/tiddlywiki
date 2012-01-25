@@ -52,6 +52,7 @@ ajaxReq({ dataType: "json", url: "/status", success: function(status) {
 					for(var i = 0; i < tids.length; i++) {
 						var tid = config.adaptors.tiddlyweb.toTiddler(tids[i], host);
 						store.addTiddler(tid);
+						store.notify(tid.title);
 					}
 					if(tids.length === 0) {
 						time = -1;
@@ -60,7 +61,6 @@ ajaxReq({ dataType: "json", url: "/status", success: function(status) {
 							var pc = 100 - Math.floor(((total_tiddlers - store.getTiddlers().length) / total_tiddlers) * 100);
 							displayMessage(pc + "% of document loaded.");
 						}
-						refreshDisplay();
 						start += total;
 						time += 100;
 						lazy_load_content(title);
