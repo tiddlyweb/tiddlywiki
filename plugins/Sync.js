@@ -1,18 +1,143 @@
-//--
-//-- Sync macro
-//--
+/***
+|Name|SyncPlugin|
+|Source|https://github.com/TiddlyWiki/tiddlywiki/blob/master/plugins/Sync.js|
+|Version|1.0.0|
+|~CoreVersion|2.6.6|
+|Type|plugin|
+|Description|Synchronise changes with other TiddlyWiki files and servers|
+!!!!!Code
+***/
+//{{{
+version.extensions.SyncPlugin= {major: 1, minor: 0, revision: 0, date: new Date(2011,11,24)};
 
 // Synchronisation handlers
 config.syncers = {};
+config.macros.sync = {};
+config.commands.syncing = {type: "popup"};
 
+var currSync = null;
+config.backstageTasks.push("sync");
+
+merge(config.tasks,{sync: {text: "sync", tooltip: "Synchronise changes with other TiddlyWiki files and servers", content: '<<sync>>'}});
+
+merge(config.macros.sync,{
+	listViewTemplate: {
+		columns: [
+			{name: 'Selected', field: 'selected', rowName: 'title', type: 'Selector'},
+			{name: 'Tiddler', field: 'tiddler', title: "Tiddler", type: 'Tiddler'},
+			{name: 'Server Type', field: 'serverType', title: "Server type", type: 'String'},
+			{name: 'Server Host', field: 'serverHost', title: "Server host", type: 'String'},
+			{name: 'Server Workspace', field: 'serverWorkspace', title: "Server workspace", type: 'String'},
+			{name: 'Status', field: 'status', title: "Synchronisation status", type: 'String'},
+			{name: 'Server URL', field: 'serverUrl', title: "Server URL", text: "View", type: 'Link'}
+			],
+		rowClasses: [
+			],
+		buttons: [
+			{caption: "Sync these tiddlers", name: 'sync'}
+			]},
+	wizardTitle: "Synchronize with external servers and files",
+	step1Title: "Choose the tiddlers you want to synchronize",
+	step1Html: "<input type='hidden' name='markList'></input>", // DO NOT TRANSLATE
+	syncLabel: "sync",
+	syncPrompt: "Sync these tiddlers",
+	hasChanged: "Changed while unplugged",
+	hasNotChanged: "Unchanged while unplugged",
+	syncStatusList: {
+		none: {text: "...", display:'none', className:'notChanged'},
+		changedServer: {text: "Changed on server", display:null, className:'changedServer'},
+		changedLocally: {text: "Changed while unplugged", display:null, className:'changedLocally'},
+		changedBoth: {text: "Changed while unplugged and on server", display:null, className:'changedBoth'},
+		notFound: {text: "Not found on server", display:null, className:'notFound'},
+		putToServer: {text: "Saved update on server", display:null, className:'putToServer'},
+		gotFromServer: {text: "Retrieved update from server", display:null, className:'gotFromServer'}
+		}
+	});
+
+merge(config.commands.syncing,{
+	text: "syncing",
+	tooltip: "Control synchronisation of this tiddler with a server or external file",
+	currentlySyncing: "<div>Currently syncing via <span class='popupHighlight'>'%0'</span> to:</"+"div><div>host: <span class='popupHighlight'>%1</span></"+"div><div>workspace: <span class='popupHighlight'>%2</span></"+"div>", // Note escaping of closing <div> tag
+	notCurrentlySyncing: "Not currently syncing",
+	captionUnSync: "Stop synchronising this tiddler",
+	chooseServer: "Synchronise this tiddler with another server:",
+	currServerMarker: "\u25cf ",
+	notCurrServerMarker: "  "});
+
+config.commands.syncing.handlePopup = function(popup,title)
+{
+	var me = config.commands.syncing;
+	var tiddler = store.fetchTiddler(title);
+	if(!tiddler)
+		return;
+	var serverType = tiddler.getServerType();
+	var serverHost = tiddler.fields["server.host"];
+	var serverWorkspace = tiddler.fields["server.workspace"];
+	if(!serverWorkspace)
+		serverWorkspace = "";
+	if(serverType) {
+		var e = createTiddlyElement(popup,"li",null,"popupMessage");
+		e.innerHTML = me.currentlySyncing.format([serverType,serverHost,serverWorkspace]);
+	} else {
+		createTiddlyElement(popup,"li",null,"popupMessage",me.notCurrentlySyncing);
+	}
+	if(serverType) {
+		createTiddlyElement(createTiddlyElement(popup,"li",null,"listBreak"),"div");
+		var btn = createTiddlyButton(createTiddlyElement(popup,"li"),this.captionUnSync,null,me.onChooseServer);
+		btn.setAttribute("tiddler",title);
+		btn.setAttribute("server.type","");
+	}
+	createTiddlyElement(createTiddlyElement(popup,"li",null,"listBreak"),"div");
+	createTiddlyElement(popup,"li",null,"popupMessage",me.chooseServer);
+	var feeds = store.getTaggedTiddlers("systemServer","title");
+	var t;
+	for(t=0; t<feeds.length; t++) {
+		var f = feeds[t];
+		var feedServerType = store.getTiddlerSlice(f.title,"Type");
+		if(!feedServerType)
+			feedServerType = "file";
+		var feedServerHost = store.getTiddlerSlice(f.title,"URL");
+		if(!feedServerHost)
+			feedServerHost = "";
+		var feedServerWorkspace = store.getTiddlerSlice(f.title,"Workspace");
+		if(!feedServerWorkspace)
+			feedServerWorkspace = "";
+		var caption = f.title;
+		if(serverType == feedServerType && serverHost == feedServerHost && serverWorkspace == feedServerWorkspace) {
+			caption = me.currServerMarker + caption;
+		} else {
+			caption = me.notCurrServerMarker + caption;
+		}
+		btn = createTiddlyButton(createTiddlyElement(popup,"li"),caption,null,me.onChooseServer);
+		btn.setAttribute("tiddler",title);
+		btn.setAttribute("server.type",feedServerType);
+		btn.setAttribute("server.host",feedServerHost);
+		btn.setAttribute("server.workspace",feedServerWorkspace);
+	}
+};
+
+config.commands.syncing.onChooseServer = function(e)
+{
+	var tiddler = this.getAttribute("tiddler");
+	var serverType = this.getAttribute("server.type");
+	if(serverType) {
+		store.addTiddlerFields(tiddler,{
+			"server.type": serverType,
+			"server.host": this.getAttribute("server.host"),
+			"server.workspace": this.getAttribute("server.workspace")
+			});
+	} else {
+		store.setValue(tiddler,"server",null);
+	}
+	return false;
+};
+
+// sync macro
 // Sync state.
 //# Members:
 //#	syncList - List of sync objects (title, tiddler, server, workspace, page, revision)
 //#	wizard - reference to wizard object
 //#	listView - DOM element of the listView table
-var currSync = null;
-
-// sync macro
 config.macros.sync.handler = function(place,macroName,params,wikifier,paramString,tiddler)
 {
 	if(!wikifier.isStatic)
@@ -219,4 +344,4 @@ config.macros.sync.doSync = function(e)
 	}
 	return false;
 };
-
+//}}}

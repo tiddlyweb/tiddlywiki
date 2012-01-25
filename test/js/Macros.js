@@ -1,5 +1,11 @@
 /*global story, jQuery, document, module, test, same strictEqual store */
 (function ($) {
+
+	var dummyDate = new Date();
+	dummyDate.setUTCHours(9);
+	dummyDate.setUTCMinutes(40);
+	var local9h = dummyDate.formatString("0hh"), local9h40 = dummyDate.formatString("0hh:0mm");
+
 	$(document).ready(function () {
 		module("Macros.js", {});
 	/*
@@ -12,7 +18,7 @@
 		config.macros.list.handler(place,"list",params,null,paramString);
 		strictEqual($("li", place).length, 4,
 			"there are 3 tiddlers defined in testdata at time of writing these should all be listed. also a prompt");
-		strictEqual($($("li", place)[0]).text(), config.macros.list.all.prompt, "make sure prompt in place.")
+		strictEqual($($("li", place)[0]).text(), config.macros.list.all.prompt, "make sure prompt in place.");
 		strictEqual($("li .tiddlyLink", place).length, 3, "3 tiddly links should have been created");
 	});
 
@@ -22,7 +28,7 @@
 		var paramString = "missing";
 		config.macros.list.handler(place,"list",params,null,paramString);
 		strictEqual($("li", place).length, 1,"no missing tiddlers only header");
-		strictEqual($($("li", place)[0]).text(), config.macros.list.missing.prompt, "make sure prompt in place.")
+		strictEqual($($("li", place)[0]).text(), config.macros.list.missing.prompt, "make sure prompt in place.");
 		strictEqual($("li .tiddlyLink", place).length, 0, "no tiddly links should have been created");
 	});
 
@@ -47,7 +53,7 @@
 		strictEqual($("li", place).length, numShadows + 1,"all shadows and the header");
 		var items = $("li", place);
 		strictEqual($("li .tiddlyLink", place).length, items.length - 1,
-			"everything but header should be tiddlylink")
+			"everything but header should be tiddlylink");
 		strictEqual($(items[1]).text(), "AdvancedOptions",
 			"the first in the list should be the shadow AdvancedOptions");
 		strictEqual($(items[items.length - 1]).text(), "WindowTitle",
@@ -82,7 +88,7 @@
 		config.macros.list.handler(place,"list",params,null,paramString);
 		var item = $("li .tiddlyLink", place);
 		strictEqual(item.length, 1,"just the tiddler matched");
-		strictEqual(item.text(), "testTiddler2")
+		strictEqual(item.text(), "testTiddler2");
 	});
 	
 	test("NEW: list filter emptyMessage", function () {
@@ -92,7 +98,7 @@
 		config.macros.list.handler(place,"list",params,null,paramString);
 		var item = $("li", place);
 		strictEqual(item.length, 1,"just the empty message");
-		strictEqual(item.text(), "what")
+		strictEqual(item.text(), "what");
 	});
 	
 	test("dateFormat default", function() {
@@ -144,6 +150,27 @@
 		strictEqual($("li:first", lists[2]).text(), "22 July 1994", "3rd heading");
 	});
 
+	test("&lt;&lt;timeline -created&gt;&gt; (prefix)", function () {
+		var place = $("<div />")[0];
+		var params = ["-created"];
+		var paramString = "-created";
+		var tiddler = store.getTiddler("testTiddler1");
+		config.macros.timeline.handler(place,"timeline",params, null, paramString, tiddler);
+		var lists = $("ul", place);
+		var items = $("li", place);
+		strictEqual($(lists[0]).hasClass("timeline"), true, "timeline class set");
+		strictEqual(lists.length, 3, "21/10/2009, 22/07/1994 and 19/10/2009");
+		strictEqual(items.length, 6, "headings plus three tiddlers");
+		var list1 = $("li", lists[0]);
+		var heading1 = $(list1[0]);
+		strictEqual(heading1.text(), "22 July 1994", "the oldest");
+		strictEqual(heading1.hasClass("listTitle"), true, "has listTitle class set");
+		var item1 = $("a", list1[1]);
+		strictEqual(item1.hasClass("tiddlyLink tiddlyLinkExisting"), true, "a tiddly link created");
+		strictEqual(item1.text(), "testTiddler2");
+		strictEqual($("li:first", lists[1]).text(), "19 October 2009", "2nd heading");
+	});
+
 	test("&lt;&lt;timeline '' 1&gt;&gt;", function () {
 		var place = $("<div />")[0];
 		var params = ["", "1"];
@@ -167,7 +194,7 @@
 		var paramString = "'' 1 '0hh:0mm'";
 		var tiddler = store.getTiddler("testTiddler1");
 		config.macros.timeline.handler(place,"timeline",params, null, paramString, tiddler);
-		strictEqual($("ul .listTitle", place).text(), "09:40", "check dateFormat parameter has propagated");
+		strictEqual($("ul .listTitle", place).text(), local9h40, "check dateFormat parameter has propagated");
 		strictEqual($("ul .listLink", place).text(), "testTiddler3", "the timestamp is more recent so this appears at the top");
 	});
 
@@ -202,7 +229,7 @@
 	//<<tagging sortBy:title>>;
 	test("tagging macro (sortby parameter)", function() {
 		var place = $("<div />")[0];
-		var paramString = "sortBy:-title"
+		var paramString = "sortBy:-title";
 		var tiddler = new Tiddler("testTag");
 		config.macros.tagging.handler(place, null, [], null, paramString, tiddler);
 
@@ -328,7 +355,7 @@
 		var paramString = "'' 1 groupTemplate:TestTemplates##Group template:TestTemplates##Item";
 		var tiddler = store.getTiddler("testTiddler1");
 		config.macros.timeline.handler(place, "timeline", params, null, paramString, tiddler);
-		strictEqual($("ul .listTitle", place).text(), "Modified at 09hrs on 01/12/2010",
+		strictEqual($("ul .listTitle", place).text(), "Modified at " + local9h + "hrs on 01/12/2010",
 			"check group template was applied");
 		strictEqual($("ul .listLink", place).text(), "hello world testTiddler3!", "the item template was applied");
 		strictEqual($("ul .listLink a", place).length, 0, "no link created");
@@ -341,7 +368,7 @@
 		var paramString = "'' 1 0hh:0mm groupTemplate:TestTemplates##Group template:TestTemplates##Item";
 		var tiddler = store.getTiddler("testTiddler1");
 		config.macros.timeline.handler(place, "timeline", params, null, paramString, tiddler);
-		strictEqual($("ul .listTitle", place).text(), "Modified at 09hrs on 01/12/2010", "check group template was applied and timestamp ignored");
+		strictEqual($("ul .listTitle", place).text(), "Modified at " + local9h + "hrs on 01/12/2010", "check group template was applied and timestamp ignored");
 	});
 
 	test("NEW: test filtering &lt;&lt;timeline filter:[tag[twoTag]]&gt;&gt; ",
