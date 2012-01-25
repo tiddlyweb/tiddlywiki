@@ -53,6 +53,7 @@ ajaxReq({ dataType: "json", url: "/status", success: function(status) {
 						var tid = config.adaptors.tiddlyweb.toTiddler(tids[i], host);
 						store.addTiddler(tid);
 						store.notify(tid.title);
+						story.refreshTiddler(tid.title, null, true);
 					}
 					if(tids.length === 0) {
 						time = -1;
